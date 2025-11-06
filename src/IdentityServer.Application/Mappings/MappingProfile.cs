@@ -1,6 +1,4 @@
 using AutoMapper;
-using IdentityServer.Application.DTOs;
-using IdentityServer.Domain.Entities;
 
 namespace IdentityServer.Application.Mappings;
 
@@ -11,9 +9,6 @@ public class MappingProfile : Profile
 {
     public MappingProfile()
     {
-        // Product mappings
-        CreateMap<Product, ProductDto>();
-        CreateMap<CreateProductDto, Product>();
-        CreateMap<UpdateProductDto, Product>();
+        // Add entity-DTO mappings here
     }
 }

@@ -21,7 +21,7 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
         _dbSet = context.Set<T>();
     }
 
-    public async Task<T?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<T?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
     {
         return await _dbSet.FindAsync(new object[] { id }, cancellationToken);
     }
@@ -48,7 +48,7 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
         return Task.CompletedTask;
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(long id, CancellationToken cancellationToken = default)
     {
         var entity = await GetByIdAsync(id, cancellationToken);
         if (entity != null)
@@ -57,7 +57,7 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
         }
     }
 
-    public async Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsAsync(long id, CancellationToken cancellationToken = default)
     {
         return await _dbSet.AnyAsync(e => e.Id == id, cancellationToken);
     }
@@ -71,4 +71,6 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
 
         return await _dbSet.CountAsync(predicate, cancellationToken);
     }
+
+    public IQueryable<T> Query() => _dbSet.Where(x => !x.IsDeleted);
 }

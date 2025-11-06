@@ -1,33 +1,34 @@
-using IdentityServer.Domain.Entities;
+﻿using IdentityServer.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace IdentityServer.Infrastructure.Configurations;
 
-public class TokenConfiguration : IEntityTypeConfiguration<Token>
+public class AuthorizationCodeConfiguration : IEntityTypeConfiguration<AuthorizationCode>
 {
-    public void Configure(EntityTypeBuilder<Token> builder)
+    public void Configure(EntityTypeBuilder<AuthorizationCode> builder)
     {
-        builder.ToTable("Tokens");
+        builder.ToTable("AuthorizationCodes");
 
-        builder.HasKey(t => t.Id);
+        builder.HasKey(a => a.Id);
 
-        builder.Property(t => t.TokenValue)
+        builder.Property(a => a.Code)
             .IsRequired()
-            .HasMaxLength(4000);
+            .HasMaxLength(200);
 
-        builder.Property(t => t.TokenType)
+        builder.Property(a => a.RedirectUri)
             .IsRequired()
-            .HasMaxLength(50);
+            .HasMaxLength(500);
 
-        builder.Property(t => t.ExpiresAt)
+        builder.Property(a => a.Scopes)
+            .IsRequired()
+            .HasMaxLength(500);
+
+        builder.Property(a => a.ExpiresAt)
             .IsRequired();
 
-        builder.Property(t => t.IsRevoked)
+        builder.Property(a => a.IsUsed)
             .HasDefaultValue(false);
-
-        builder.Property(t => t.Scopes)
-            .HasMaxLength(500);
 
         builder.Property(x => x.CreatedAt)
             .IsRequired();
@@ -45,14 +46,14 @@ public class TokenConfiguration : IEntityTypeConfiguration<Token>
             .IsRequired()
             .HasDefaultValue(false);
 
-        builder.HasOne(t => t.User)
-            .WithMany(u => u.Tokens)
-            .HasForeignKey(t => t.UserId)
+        builder.HasOne(a => a.Client)
+            .WithMany()
+            .HasForeignKey(a => a.ClientId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(t => t.Client)
+        builder.HasOne(a => a.User)
             .WithMany()
-            .HasForeignKey(t => t.ClientId)
+            .HasForeignKey(a => a.UserId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

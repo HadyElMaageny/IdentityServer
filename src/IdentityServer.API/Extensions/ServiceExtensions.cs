@@ -3,10 +3,13 @@ using FluentValidation.AspNetCore;
 using IdentityServer.Application.Interfaces;
 using IdentityServer.Application.Mappings;
 using IdentityServer.Application.Services;
+using IdentityServer.Domain.Entities;
 using IdentityServer.Domain.Interfaces;
 using IdentityServer.Infrastructure.Data;
 using IdentityServer.Infrastructure.Repositories;
+using IdentityServer.Shared.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -30,7 +33,12 @@ public static class ServiceExtensions
         services.AddFluentValidationAutoValidation();
 
         // Add application services
-        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<ITokenEndpointService, TokenEndpointService>();
+
+        // Add password hasher
+        services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
         return services;
     }
@@ -50,6 +58,9 @@ public static class ServiceExtensions
 
     public static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
+        // Bind JwtSettings from configuration
+        services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
+
         var jwtSettings = configuration.GetSection("JwtSettings");
         var secret = jwtSettings["Secret"];
 

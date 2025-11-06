@@ -18,7 +18,21 @@
       "Bash(git --version)",
       "Bash(git config:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git remote add:*)",
+      "Bash(dotnet remove package:*)",
+      "Bash(dotnet tool list:*)",
+      "Bash(dotnet tool update:*)",
+      "Bash(dotnet ef database update:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(tasklist:*)",
+      "Bash(timeout 5 dotnet run:*)",
+      "Bash(dotnet ef migrations remove:*)",
+      "Bash(dotnet ef database drop:*)",
+      "Bash(nul)"
     ],
     "deny": [],
     "ask": []
