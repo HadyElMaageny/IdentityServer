@@ -47,6 +47,7 @@ public class ScopeConfiguration : IEntityTypeConfiguration<Scope>
 
         builder.HasMany(s => s.ClientScopes)
             .WithOne(cs => cs.Scope)
-            .HasForeignKey(cs => cs.ScopeId);
+            .HasForeignKey(cs => cs.ScopeId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

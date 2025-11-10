@@ -47,7 +47,7 @@ public class AuthorizationCodeConfiguration : IEntityTypeConfiguration<Authoriza
             .HasDefaultValue(false);
 
         builder.HasOne(a => a.Client)
-            .WithMany()
+            .WithMany(c => c.AuthorizationCodes)
             .HasForeignKey(a => a.ClientId)
             .OnDelete(DeleteBehavior.Cascade);
 

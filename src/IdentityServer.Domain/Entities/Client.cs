@@ -2,7 +2,7 @@ namespace IdentityServer.Domain.Entities;
 
 public class Client : BaseEntity
 {
-    public string ClientId { get; set; } = default!;
+    public string ClientIdentifier { get; set; } = default!;
     public string ClientSecret { get; set; } = default!;
     public string ClientName { get; set; } = default!;
     public string RedirectUris { get; set; } = default!; // comma-separated list

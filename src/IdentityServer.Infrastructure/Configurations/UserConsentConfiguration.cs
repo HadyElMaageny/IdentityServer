@@ -37,12 +37,10 @@ public class UserConsentConfiguration : IEntityTypeConfiguration<UserConsent>
 
         builder.HasOne(uc => uc.User)
             .WithMany()
-            .HasForeignKey(uc => uc.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .HasForeignKey(uc => uc.UserId);
 
         builder.HasOne(uc => uc.Client)
-            .WithMany()
-            .HasForeignKey(uc => uc.ClientId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .WithMany(c =>  c.UserConsents)
+            .HasForeignKey(uc => uc.ClientId);
     }
 }

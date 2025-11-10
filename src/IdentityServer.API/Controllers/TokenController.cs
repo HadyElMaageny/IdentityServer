@@ -1,3 +1,4 @@
+using IdentityServer.Application.DTOs.AuthorizationCode;
 using IdentityServer.Application.DTOs.Token;
 using IdentityServer.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -35,8 +36,8 @@ public class TokenController : ControllerBase
     [HttpPost("token")]
     [Consumes("application/x-www-form-urlencoded")]
     [ProducesResponseType(typeof(TokenResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(TokenErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(TokenErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Token(
         [FromForm] TokenRequest request,
         CancellationToken cancellationToken)
@@ -45,7 +46,7 @@ public class TokenController : ControllerBase
         {
             // Log token request (without sensitive data)
             _logger.LogInformation(
-                "Token request received - grant_type: {GrantType}, client_id: {ClientId}",
+                "Token request received - grant_type: {GrantType}, client_id: {ClientIdentifier}",
                 request.GrantType,
                 request.ClientId);
 
@@ -59,7 +60,7 @@ public class TokenController : ControllerBase
             }
 
             // Determine appropriate error response
-            var errorResponse = new TokenErrorResponse
+            var errorResponse = new ErrorResponse
             {
                 Error = DetermineErrorCode(result.Message),
                 ErrorDescription = result.Message
@@ -69,7 +70,7 @@ public class TokenController : ControllerBase
             if (IsClientAuthError(errorResponse.Error))
             {
                 _logger.LogWarning(
-                    "Client authentication failed - client_id: {ClientId}, error: {Error}",
+                    "Client authentication failed - client_id: {ClientIdentifier}, error: {Error}",
                     request.ClientId,
                     errorResponse.Error);
 
@@ -79,7 +80,7 @@ public class TokenController : ControllerBase
 
             // Other errors return 400
             _logger.LogWarning(
-                "Token request failed - client_id: {ClientId}, grant_type: {GrantType}, error: {Error}",
+                "Token request failed - client_id: {ClientIdentifier}, grant_type: {GrantType}, error: {Error}",
                 request.ClientId,
                 request.GrantType,
                 errorResponse.Error);
@@ -92,7 +93,82 @@ public class TokenController : ControllerBase
 
             return StatusCode(
                 StatusCodes.Status500InternalServerError,
-                new TokenErrorResponse
+                new ErrorResponse
+                {
+                    Error = "server_error",
+                    ErrorDescription = "An internal server error occurred"
+                });
+        }
+    }
+
+
+    [HttpPost("authorize")]
+    public async Task<IActionResult> Authorize(
+        [FromForm] AuthorizationCodeRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            _logger.LogInformation(
+                "Authorization code received - response_type: {ResponseType}, client_id: {ClientIdentifier}",
+                request.ResponseType,
+                request.ClientId);
+            if (!User.Identity?.IsAuthenticated ?? true)
+            {
+                // Tell Angular to redirect user to login page
+                return Unauthorized(new
+                {
+                    action = "login",
+                    message = "User not authenticated",
+                    returnUrl = $"{Request.Path}{Request.QueryString}"
+                });
+            }
+            var userId = long.Parse(User.FindFirst("sub")!.Value);
+
+            var result = await _tokenEndpointService.ProcessAuthorizationCodeGrantAsync
+                (request, userId, cancellationToken);
+            if (result.IsSuccess)
+            {
+                // RFC 6749: Success response with 200 OK
+                return Ok(result.Data);
+            }
+
+            // Determine appropriate error response
+            var errorResponse = new ErrorResponse
+            {
+                Error = DetermineErrorCode(result.Message),
+                ErrorDescription = result.Message
+            };
+
+            // Client authentication failures return 401
+            if (IsClientAuthError(errorResponse.Error))
+            {
+                _logger.LogWarning(
+                    "Client authentication failed - client_id: {ClientIdentifier}, error: {Error}",
+                    request.ClientId,
+                    errorResponse.Error);
+
+                Response.Headers.Append("WWW-Authenticate", "Basic realm=\"IdentityServer\"");
+                return Unauthorized(errorResponse);
+            }
+
+            // Other errors return 400
+            _logger.LogWarning(
+                "Token request failed - client_id: {ClientIdentifier}, grant_type: {ResponseType}, error: {Error}",
+                request.ClientId,
+                request.ResponseType,
+                errorResponse.Error);
+
+            return BadRequest(errorResponse);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled exception in token endpoint");
+
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new ErrorResponse
                 {
                     Error = "server_error",
                     ErrorDescription = "An internal server error occurred"

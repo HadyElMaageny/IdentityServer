@@ -12,7 +12,7 @@ public class ClientConfiguration : IEntityTypeConfiguration<Client>
 
         builder.HasKey(c => c.Id);
 
-        builder.Property(c => c.ClientId)
+        builder.Property(c => c.ClientIdentifier)
             .IsRequired()
             .HasMaxLength(100);
 
@@ -40,7 +40,7 @@ public class ClientConfiguration : IEntityTypeConfiguration<Client>
 
         builder.Property(c => c.Enabled)
             .HasDefaultValue(true);
-        
+
         builder.Property(x => x.CreatedAt)
             .IsRequired();
 
@@ -60,6 +60,22 @@ public class ClientConfiguration : IEntityTypeConfiguration<Client>
         // relationships
         builder.HasMany(c => c.ClientScopes)
             .WithOne(cs => cs.Client)
-            .HasForeignKey(cs => cs.ClientId);
+            .HasForeignKey(cs => cs.ClientId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(c => c.UserConsents)
+            .WithOne(uc => uc.Client)
+            .HasForeignKey(uc => uc.ClientId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        builder.HasMany(c => c.AuthorizationCodes)
+            .WithOne(ac => ac.Client)
+            .HasForeignKey(ac => ac.ClientId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(c => c.UserConsents)
+            .WithOne(uc => uc.Client)
+            .HasForeignKey(uc => uc.ClientId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

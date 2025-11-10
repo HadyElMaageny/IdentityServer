@@ -30,7 +30,7 @@ namespace IdentityServer.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long>("ClientId")
+                    b.Property<long>("ClientIdentifier")
                         .HasColumnType("bigint");
 
                     b.Property<long?>("ClientId1")
@@ -89,7 +89,7 @@ namespace IdentityServer.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClientId");
+                    b.HasIndex("ClientIdentifier");
 
                     b.HasIndex("ClientId1");
 
@@ -114,7 +114,7 @@ namespace IdentityServer.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("ClientId")
+                    b.Property<string>("ClientIdentifier")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -172,13 +172,13 @@ namespace IdentityServer.Infrastructure.Migrations
 
             modelBuilder.Entity("IdentityServer.Domain.Entities.ClientScope", b =>
                 {
-                    b.Property<long>("ClientId")
+                    b.Property<long>("ClientIdentifier")
                         .HasColumnType("bigint");
 
                     b.Property<long>("ScopeId")
                         .HasColumnType("bigint");
 
-                    b.HasKey("ClientId", "ScopeId");
+                    b.HasKey("ClientIdentifier", "ScopeId");
 
                     b.HasIndex("ScopeId");
 
@@ -249,7 +249,7 @@ namespace IdentityServer.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long>("ClientId")
+                    b.Property<long>("ClientIdentifier")
                         .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedAt")
@@ -298,7 +298,7 @@ namespace IdentityServer.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClientId");
+                    b.HasIndex("ClientIdentifier");
 
                     b.HasIndex("UserId");
 
@@ -365,10 +365,7 @@ namespace IdentityServer.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long>("ClientId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("ClientId1")
+                    b.Property<long>("ClientIdentifier")
                         .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedAt")
@@ -403,9 +400,7 @@ namespace IdentityServer.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClientId");
-
-                    b.HasIndex("ClientId1");
+                    b.HasIndex("ClientIdentifier");
 
                     b.HasIndex("UserId");
 
@@ -416,7 +411,7 @@ namespace IdentityServer.Infrastructure.Migrations
                 {
                     b.HasOne("IdentityServer.Domain.Entities.Client", "Client")
                         .WithMany()
-                        .HasForeignKey("ClientId")
+                        .HasForeignKey("ClientIdentifier")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -439,7 +434,7 @@ namespace IdentityServer.Infrastructure.Migrations
                 {
                     b.HasOne("IdentityServer.Domain.Entities.Client", "Client")
                         .WithMany("ClientScopes")
-                        .HasForeignKey("ClientId")
+                        .HasForeignKey("ClientIdentifier")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -458,7 +453,7 @@ namespace IdentityServer.Infrastructure.Migrations
                 {
                     b.HasOne("IdentityServer.Domain.Entities.Client", "Client")
                         .WithMany()
-                        .HasForeignKey("ClientId")
+                        .HasForeignKey("ClientIdentifier")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -476,14 +471,10 @@ namespace IdentityServer.Infrastructure.Migrations
             modelBuilder.Entity("IdentityServer.Domain.Entities.UserConsent", b =>
                 {
                     b.HasOne("IdentityServer.Domain.Entities.Client", "Client")
-                        .WithMany()
-                        .HasForeignKey("ClientId")
+                        .WithMany("UserConsents")
+                        .HasForeignKey("ClientIdentifier")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("IdentityServer.Domain.Entities.Client", null)
-                        .WithMany("UserConsents")
-                        .HasForeignKey("ClientId1");
 
                     b.HasOne("IdentityServer.Domain.Entities.User", "User")
                         .WithMany()

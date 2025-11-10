@@ -9,4 +9,5 @@ public class User : BaseEntity
     
     // Navigation property for related tokens
     public ICollection<Token> Tokens { get; set; } = new List<Token>();
+    public ICollection<UserConsent>  UserConsents { get; set; } = new List<UserConsent>();
 }

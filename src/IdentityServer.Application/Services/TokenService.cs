@@ -144,7 +144,7 @@ public class TokenService : ITokenService
             new(JwtRegisteredClaimNames.UniqueName, user.Username),
             new("username", user.Username),
             new("email", user.Email ?? string.Empty),
-            new("client_id", client.ClientId)
+            new("client_id", client.ClientIdentifier)
         };
 
         foreach (var scope in scopes)
@@ -175,8 +175,8 @@ public class TokenService : ITokenService
 
         var claims = new List<Claim>
         {
-            new(JwtRegisteredClaimNames.Sub, client.ClientId),
-            new("client_id", client.ClientId)
+            new(JwtRegisteredClaimNames.Sub, client.ClientIdentifier),
+            new("client_id", client.ClientIdentifier)
         };
 
         foreach (var scope in scopes)

@@ -36,6 +36,8 @@ public static class ServiceExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<ITokenEndpointService, TokenEndpointService>();
+        services.AddScoped<IAuthorizationService, AuthorizationService>();
+        services.AddScoped<IUserConsentService, UserConsentService>();
 
         // Add password hasher
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();

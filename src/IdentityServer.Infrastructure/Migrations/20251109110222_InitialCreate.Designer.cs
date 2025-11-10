@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace IdentityServer.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251105121716_UpdateEntitiesForTokenEndpoint")]
-    partial class UpdateEntitiesForTokenEndpoint
+    [Migration("20251109110222_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -371,9 +371,6 @@ namespace IdentityServer.Infrastructure.Migrations
                     b.Property<long>("ClientId")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("ClientId1")
-                        .HasColumnType("bigint");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -407,8 +404,6 @@ namespace IdentityServer.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ClientId");
-
-                    b.HasIndex("ClientId1");
 
                     b.HasIndex("UserId");
 
@@ -479,14 +474,10 @@ namespace IdentityServer.Infrastructure.Migrations
             modelBuilder.Entity("IdentityServer.Domain.Entities.UserConsent", b =>
                 {
                     b.HasOne("IdentityServer.Domain.Entities.Client", "Client")
-                        .WithMany()
+                        .WithMany("UserConsents")
                         .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("IdentityServer.Domain.Entities.Client", null)
-                        .WithMany("UserConsents")
-                        .HasForeignKey("ClientId1");
 
                     b.HasOne("IdentityServer.Domain.Entities.User", "User")
                         .WithMany()

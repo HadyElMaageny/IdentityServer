@@ -5,6 +5,8 @@ using IdentityServer.Domain.Interfaces;
 using IdentityServer.Shared.Common;
 using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
+using IdentityServer.Application.DTOs.AuthorizationCode;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace IdentityServer.Application.Services;
 
@@ -17,6 +19,8 @@ public class TokenEndpointService : ITokenEndpointService
     private readonly ITokenService _tokenService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<TokenEndpointService> _logger;
+    private readonly IUserConsentService _userConsentService;
+    private readonly IAuthorizationService _authorizationService;
 
     public TokenEndpointService(
         IRepository<Client> clientRepository,
@@ -25,7 +29,9 @@ public class TokenEndpointService : ITokenEndpointService
         IRepository<User> userRepository,
         ITokenService tokenService,
         IUnitOfWork unitOfWork,
-        ILogger<TokenEndpointService> logger)
+        ILogger<TokenEndpointService> logger,
+        IUserConsentService userConsentService,
+        IAuthorizationService authorizationService)
     {
         _clientRepository = clientRepository;
         _authCodeRepository = authCodeRepository;
@@ -34,6 +40,8 @@ public class TokenEndpointService : ITokenEndpointService
         _tokenService = tokenService;
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _userConsentService = userConsentService;
+        _authorizationService = authorizationService;
     }
 
     public async Task<Result<TokenResponse>> ProcessTokenRequestAsync(TokenRequest request,
@@ -44,7 +52,7 @@ public class TokenEndpointService : ITokenEndpointService
             var clientResult = await ValidateClientAsync(request, cancellationToken);
             if (!clientResult.IsSuccess)
             {
-                _logger.LogWarning("Client validation failed for client_id: {ClientId}", request.ClientId);
+                _logger.LogWarning("Client validation failed for client_id: {ClientIdentifier}", request.ClientId);
                 return Result<TokenResponse>.Failure(clientResult.Errors ?? new List<string> { "Invalid client" });
             }
 
@@ -60,10 +68,108 @@ public class TokenEndpointService : ITokenEndpointService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing token request for client: {ClientId}", request.ClientId);
+            _logger.LogError(ex, "Error processing token request for client: {ClientIdentifier}", request.ClientId);
             return Result<TokenResponse>.Failure("Internal server error processing token request");
         }
     }
+
+    public async Task<Result<AuthorizationCodeResponse>> ProcessAuthorizationCodeGrantAsync(
+        AuthorizationCodeRequest request, long userId,
+        CancellationToken cancellationToken = default)
+    {
+        var clientResult = await ValidateClientForAuthCodeRequestAsync(request, cancellationToken);
+        if (!clientResult.IsSuccess){
+            var codeResult = await _authorizationService.GenerateAuthorizationCodeAsync(userId, client.Id, request.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries), request.RedirectUri, cancellationToken  );
+            if (!codeResult.IsSuccess)
+            {
+                _logger.LogError("Failed to generate authorization code for user {UserId}", userId);
+                return Result<AuthorizationCodeResponse>.Failure(codeResult.Errors ?? ["Failed to generate authorization code"]);
+            }
+        }
+
+        // Generate authorization code
+        var authCode = codeResult.Data!;
+        
+        // Update the authorization code with redirect URI
+        authCode.RedirectUri = request.RedirectUri;
+        await _authCodeRepository.UpdateAsync(authCode, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Build redirect URI with authorization code
+        var queryParams = new Dictionary<string, string?>
+        {
+            ["code"] = authCode.Code
+        };
+        
+        if (!string.IsNullOrWhiteSpace(request.State))
+        {
+            queryParams["state"] = request.State;
+        }
+        
+        var finalRedirectUri = QueryHelpers.AddQueryString(request.RedirectUri, queryParams);
+
+        _logger.LogInformation(
+            "Authorization code generated successfully for user {UserId}, client {ClientIdentifier}", 
+            userId, 
+            client.Id);
+
+        return Result<AuthorizationCodeResponse>.Success(new AuthorizationCodeResponse
+        {
+            Action = "redirect",
+            RedirectUri = finalRedirectUri,
+            ClientName = client.ClientName,
+            Scopes = scopes.ToList(),
+            State = request.State
+        });
+    }
+
+    private async Task<Result<Client>> ValidateClientForAuthCodeRequestAsync(
+        AuthorizationCodeRequest request,
+        CancellationToken cancellationToken)
+    {
+        // 1️⃣ Validate client_id
+        if (string.IsNullOrWhiteSpace(request.ClientId))
+            return Result<Client>.Failure("client_id is required");
+
+        // 2️⃣ Validate redirect_uri
+        if (string.IsNullOrWhiteSpace(request.RedirectUri))
+            return Result<Client>.Failure("redirect_uri is required");
+
+        // 3️⃣ Get client by client_id
+        var clients = await _clientRepository.FindAsync(
+            c => c.ClientIdentifier == request.ClientId && !c.IsDeleted,
+            cancellationToken);
+        var client = clients.FirstOrDefault();
+
+        if (client == null)
+        {
+            _logger.LogWarning("Client not found for client_id: {ClientIdentifier}", request.ClientId);
+            return Result<Client>.Failure("Invalid client_id");
+        }
+
+        // 4️⃣ Check if client is enabled
+        if (!client.Enabled)
+            return Result<Client>.Failure("Client is disabled");
+
+        // 5️⃣ Validate redirect_uri is in client's allowed redirect URIs
+        var allowedRedirectUris = client.RedirectUris
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(uri => uri.Trim())
+            .ToList();
+
+        if (!allowedRedirectUris.Contains(request.RedirectUri, StringComparer.Ordinal))
+        {
+            _logger.LogWarning(
+                "Invalid redirect_uri for client {ClientIdentifier}. Provided: {RedirectUri}, Allowed: {AllowedUris}",
+                request.ClientId,
+                request.RedirectUri,
+                client.RedirectUris);
+            return Result<Client>.Failure("Invalid redirect_uri");
+        }
+
+        return Result<Client>.Success(client);
+    }
+
 
     private async Task<Result<Client>> ValidateClientAsync(TokenRequest request, CancellationToken cancellationToken)
     {
@@ -71,7 +177,7 @@ public class TokenEndpointService : ITokenEndpointService
             return Result<Client>.Failure("client_id is required");
 
         var clients =
-            await _clientRepository.FindAsync(c => c.ClientId == request.ClientId && !c.IsDeleted, cancellationToken);
+            await _clientRepository.FindAsync(c => c.ClientIdentifier == request.ClientId && !c.IsDeleted, cancellationToken);
         var client = clients.FirstOrDefault();
 
         if (client == null)
@@ -254,7 +360,7 @@ public class TokenEndpointService : ITokenEndpointService
         if (!tokenResult.IsSuccess)
             return Result<TokenResponse>.Failure(tokenResult.Errors ?? new List<string> { "Failed to generate token" });
 
-        _logger.LogInformation("Client credentials token issued for client {ClientId}", client.ClientId);
+        _logger.LogInformation("Client credentials token issued for client {ClientIdentifier}", client.ClientIdentifier);
 
         return tokenResult;
     }

@@ -47,12 +47,10 @@ public class TokenConfiguration : IEntityTypeConfiguration<Token>
 
         builder.HasOne(t => t.User)
             .WithMany(u => u.Tokens)
-            .HasForeignKey(t => t.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .HasForeignKey(t => t.UserId);
 
         builder.HasOne(t => t.Client)
             .WithMany()
-            .HasForeignKey(t => t.ClientId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .HasForeignKey(t => t.ClientId);
     }
 }

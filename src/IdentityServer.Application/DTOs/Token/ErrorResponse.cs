@@ -3,7 +3,7 @@ namespace IdentityServer.Application.DTOs.Token;
 /// <summary>
 /// OAuth2 error response as per RFC 6749 Section 5.2
 /// </summary>
-public class TokenErrorResponse
+public class ErrorResponse
 {
     /// <summary>
     /// Error code (invalid_request, invalid_client, invalid_grant, etc.)

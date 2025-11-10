@@ -1,3 +1,4 @@
+using IdentityServer.Application.DTOs.AuthorizationCode;
 using IdentityServer.Application.DTOs.Token;
 using IdentityServer.Shared.Common;
 
@@ -15,6 +16,9 @@ public interface ITokenEndpointService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result containing token response or error</returns>
     Task<Result<TokenResponse>> ProcessTokenRequestAsync(
-        TokenRequest request, 
+        TokenRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<AuthorizationCodeResponse>> ProcessAuthorizationCodeGrantAsync(AuthorizationCodeRequest request, long userId,
         CancellationToken cancellationToken = default);
 }
