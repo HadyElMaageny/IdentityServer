@@ -14,6 +14,9 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<User> Users { get; set; }
     public DbSet<Token> Tokens { get; set; }
+    public DbSet<ClientScope> ClientScopes { get; set; }
+    public DbSet<Client> Clients { get; set; }
+    public DbSet<Scope> Scopes { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

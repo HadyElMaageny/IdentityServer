@@ -38,6 +38,26 @@ try
 
     var app = builder.Build();
 
+    // Seed database in development
+    if (app.Environment.IsDevelopment())
+    {
+        using var scope = app.Services.CreateScope();
+        var services = scope.ServiceProvider;
+        try
+        {
+            var context = services.GetRequiredService<IdentityServer.Infrastructure.Data.ApplicationDbContext>();
+            var passwordHasher = services.GetRequiredService<Microsoft.AspNetCore.Identity.IPasswordHasher<IdentityServer.Domain.Entities.User>>();
+            var logger = services.GetRequiredService<ILogger<Program>>();
+
+            await IdentityServer.Infrastructure.Data.DataSeeder.SeedDataAsync(context, passwordHasher, logger);
+        }
+        catch (Exception ex)
+        {
+            var logger = services.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "An error occurred while seeding the database");
+        }
+    }
+
     // Configure the HTTP request pipeline
     if (app.Environment.IsDevelopment())
     {

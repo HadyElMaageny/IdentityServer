@@ -3,7 +3,7 @@
 public class UserConsent : BaseEntity
 {
     public long UserId { get; set; }
-    public string ClientId { get; set; } = string.Empty;
+    public long ClientId { get; set; }
     public string Scopes { get; set; } = default!;
     public DateTime GrantedAt { get; set; }
 

@@ -26,7 +26,7 @@ public class Result<T>
         return new Result<T>
         {
             IsSuccess = false,
-            Errors = new List<string> { error }
+            Errors = [error]
         };
     }
 

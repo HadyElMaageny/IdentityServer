@@ -18,7 +18,4 @@ public interface ITokenEndpointService
     Task<Result<TokenResponse>> ProcessTokenRequestAsync(
         TokenRequest request,
         CancellationToken cancellationToken = default);
-
-    Task<Result<AuthorizationCodeResponse>> ProcessAuthorizationCodeGrantAsync(AuthorizationCodeRequest request, long userId,
-        CancellationToken cancellationToken = default);
 }

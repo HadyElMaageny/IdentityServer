@@ -267,6 +267,12 @@ The project includes a complete JWT-based authentication system with the followi
 - Supports multiple grant types (authorization_code, refresh_token, etc.)
 - Handles client authentication and validation
 
+**IAuthorizationEndpointService** (`Application/Interfaces/IAuthorizationEndpointService.cs`)
+- `ProcessAuthorizeRequestAsync(AuthorizationCodeRequest, userId)`: OAuth2 authorization endpoint handler
+- Validates client, redirect URI, and requested scopes
+- Checks user consent and generates authorization codes
+- Returns redirect response or consent required response
+
 ### Password Hashing
 
 The project uses `Microsoft.AspNetCore.Identity.PasswordHasher<User>` for secure password hashing:
@@ -542,6 +548,61 @@ The IdentityServer currently implements the following endpoints:
 }
 ```
 
+### OAuth2 Authorization Endpoint
+
+**Base Route:** `/connect`
+
+| Method | Endpoint | Description | Response |
+|--------|----------|-------------|----------|
+| GET/POST | `/connect/authorize` | OAuth2 authorization endpoint (RFC 6749 Section 3.1) | `AuthorizationCodeResponse` or error redirect |
+
+**Required Parameters:**
+- `client_id` - Client identifier
+- `redirect_uri` - Registered redirect URI
+- `response_type` - Must be "code" for authorization code flow
+- `scope` - Space-separated list of scopes (e.g., "openid profile email")
+- `state` - Recommended for CSRF protection
+
+**Authorization Request:**
+```
+GET /connect/authorize?client_id=CLIENT_ID&redirect_uri=https://client.example.com/callback&response_type=code&scope=openid%20profile&state=xyz
+```
+
+**Success Response (redirect action):**
+```json
+{
+  "action": "redirect",
+  "redirectUri": "https://client.example.com/callback?code=AUTH_CODE&state=xyz",
+  "clientName": "My Application",
+  "scopes": ["openid", "profile"],
+  "state": "xyz"
+}
+```
+
+**Consent Required Response:**
+```json
+{
+  "action": "consent",
+  "clientName": "My Application",
+  "scopes": ["openid", "profile"],
+  "state": "xyz"
+}
+```
+
+**Error Response:**
+```json
+{
+  "action": "error",
+  "redirectUri": "https://client.example.com/callback?error=invalid_scope&error_description=...",
+  "state": "xyz"
+}
+```
+
+**Notes:**
+- Requires user authentication (JWT token in Authorization header)
+- User consent is checked; if not granted, returns consent UI data
+- Authorization code is generated only after consent is granted
+
 ### OAuth2 Token Endpoint
 
 **Base Route:** `/connect`
@@ -613,6 +674,13 @@ curl -X POST https://localhost:7208/api/v1/auth/login \
     "email": "test@example.com",
     "password": "SecurePassword123!"
   }'
+```
+
+**OAuth2 Authorization Request (requires authentication):**
+```bash
+# First login to get access token, then:
+curl -X GET "https://localhost:7208/connect/authorize?client_id=CLIENT_ID&redirect_uri=https://client.example.com/callback&response_type=code&scope=openid%20profile&state=xyz" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 **OAuth2 Token Request:**

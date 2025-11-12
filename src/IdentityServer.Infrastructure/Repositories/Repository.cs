@@ -10,16 +10,11 @@ namespace IdentityServer.Infrastructure.Repositories;
 /// Generic repository implementation
 /// </summary>
 /// <typeparam name="T">Entity type</typeparam>
-public class Repository<T> : IRepository<T> where T : BaseEntity
+public class Repository<T>(ApplicationDbContext context) : IRepository<T>
+    where T : BaseEntity
 {
-    private readonly ApplicationDbContext _context;
-    private readonly DbSet<T> _dbSet;
-
-    public Repository(ApplicationDbContext context)
-    {
-        _context = context;
-        _dbSet = context.Set<T>();
-    }
+    private readonly ApplicationDbContext _context = context;
+    private readonly DbSet<T> _dbSet = context.Set<T>();
 
     public async Task<T?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
     {

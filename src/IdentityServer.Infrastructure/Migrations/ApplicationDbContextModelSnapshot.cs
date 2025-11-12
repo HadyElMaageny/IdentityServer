@@ -30,22 +30,13 @@ namespace IdentityServer.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long>("ClientIdentifier")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("ClientId1")
+                    b.Property<long>("ClientId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("CodeChallenge")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CodeChallengeMethod")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -89,9 +80,7 @@ namespace IdentityServer.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClientIdentifier");
-
-                    b.HasIndex("ClientId1");
+                    b.HasIndex("ClientId");
 
                     b.HasIndex("UserId");
 
@@ -172,13 +161,13 @@ namespace IdentityServer.Infrastructure.Migrations
 
             modelBuilder.Entity("IdentityServer.Domain.Entities.ClientScope", b =>
                 {
-                    b.Property<long>("ClientIdentifier")
+                    b.Property<long>("ClientId")
                         .HasColumnType("bigint");
 
                     b.Property<long>("ScopeId")
                         .HasColumnType("bigint");
 
-                    b.HasKey("ClientIdentifier", "ScopeId");
+                    b.HasKey("ClientId", "ScopeId");
 
                     b.HasIndex("ScopeId");
 
@@ -249,7 +238,7 @@ namespace IdentityServer.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long>("ClientIdentifier")
+                    b.Property<long>("ClientId")
                         .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedAt")
@@ -298,7 +287,7 @@ namespace IdentityServer.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClientIdentifier");
+                    b.HasIndex("ClientId");
 
                     b.HasIndex("UserId");
 
@@ -365,7 +354,7 @@ namespace IdentityServer.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long>("ClientIdentifier")
+                    b.Property<long>("ClientId")
                         .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedAt")
@@ -398,11 +387,16 @@ namespace IdentityServer.Infrastructure.Migrations
                     b.Property<long>("UserId")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("UserId1")
+                        .HasColumnType("bigint");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("ClientIdentifier");
+                    b.HasIndex("ClientId");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("UserId1");
 
                     b.ToTable("UserConsents", (string)null);
                 });
@@ -410,14 +404,10 @@ namespace IdentityServer.Infrastructure.Migrations
             modelBuilder.Entity("IdentityServer.Domain.Entities.AuthorizationCode", b =>
                 {
                     b.HasOne("IdentityServer.Domain.Entities.Client", "Client")
-                        .WithMany()
-                        .HasForeignKey("ClientIdentifier")
+                        .WithMany("AuthorizationCodes")
+                        .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("IdentityServer.Domain.Entities.Client", null)
-                        .WithMany("AuthorizationCodes")
-                        .HasForeignKey("ClientId1");
 
                     b.HasOne("IdentityServer.Domain.Entities.User", "User")
                         .WithMany()
@@ -434,7 +424,7 @@ namespace IdentityServer.Infrastructure.Migrations
                 {
                     b.HasOne("IdentityServer.Domain.Entities.Client", "Client")
                         .WithMany("ClientScopes")
-                        .HasForeignKey("ClientIdentifier")
+                        .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -453,7 +443,7 @@ namespace IdentityServer.Infrastructure.Migrations
                 {
                     b.HasOne("IdentityServer.Domain.Entities.Client", "Client")
                         .WithMany()
-                        .HasForeignKey("ClientIdentifier")
+                        .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -472,7 +462,7 @@ namespace IdentityServer.Infrastructure.Migrations
                 {
                     b.HasOne("IdentityServer.Domain.Entities.Client", "Client")
                         .WithMany("UserConsents")
-                        .HasForeignKey("ClientIdentifier")
+                        .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -481,6 +471,10 @@ namespace IdentityServer.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("IdentityServer.Domain.Entities.User", null)
+                        .WithMany("UserConsents")
+                        .HasForeignKey("UserId1");
 
                     b.Navigation("Client");
 
@@ -504,6 +498,8 @@ namespace IdentityServer.Infrastructure.Migrations
             modelBuilder.Entity("IdentityServer.Domain.Entities.User", b =>
                 {
                     b.Navigation("Tokens");
+
+                    b.Navigation("UserConsents");
                 });
 #pragma warning restore 612, 618
         }

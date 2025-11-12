@@ -17,7 +17,7 @@ namespace IdentityServer.Infrastructure.Migrations
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    ClientId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    ClientIdentifier = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     ClientSecret = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     ClientName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     RedirectUris = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
@@ -117,9 +117,6 @@ namespace IdentityServer.Infrastructure.Migrations
                     Scopes = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     ExpiresAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     IsUsed = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
-                    CodeChallenge = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    CodeChallengeMethod = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ClientId1 = table.Column<long>(type: "bigint", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     CreatedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
@@ -135,11 +132,6 @@ namespace IdentityServer.Infrastructure.Migrations
                         principalTable: "Clients",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_AuthorizationCodes_Clients_ClientId1",
-                        column: x => x.ClientId1,
-                        principalTable: "Clients",
-                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_AuthorizationCodes_Users_UserId",
                         column: x => x.UserId,
@@ -194,6 +186,7 @@ namespace IdentityServer.Infrastructure.Migrations
                     ClientId = table.Column<long>(type: "bigint", nullable: false),
                     Scopes = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     GrantedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UserId1 = table.Column<long>(type: "bigint", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     CreatedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
@@ -215,17 +208,17 @@ namespace IdentityServer.Infrastructure.Migrations
                         principalTable: "Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_UserConsents_Users_UserId1",
+                        column: x => x.UserId1,
+                        principalTable: "Users",
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateIndex(
                 name: "IX_AuthorizationCodes_ClientId",
                 table: "AuthorizationCodes",
-                column: "ClientIdentifier");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AuthorizationCodes_ClientId1",
-                table: "AuthorizationCodes",
-                column: "ClientId1");
+                column: "ClientId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AuthorizationCodes_UserId",
@@ -240,7 +233,7 @@ namespace IdentityServer.Infrastructure.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_Tokens_ClientId",
                 table: "Tokens",
-                column: "ClientIdentifier");
+                column: "ClientId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Tokens_UserId",
@@ -250,12 +243,17 @@ namespace IdentityServer.Infrastructure.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_UserConsents_ClientId",
                 table: "UserConsents",
-                column: "ClientIdentifier");
+                column: "ClientId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserConsents_UserId",
                 table: "UserConsents",
                 column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UserConsents_UserId1",
+                table: "UserConsents",
+                column: "UserId1");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_Username",

@@ -19,7 +19,7 @@ public class UserConsentService : IUserConsentService
         _logger = logger;
     }
 
-    public async Task<bool> HasConsentAsync(long userId, string clientId, string scopes,
+    public async Task<bool> HasConsentAsync(long userId, long clientId, string scopes,
         CancellationToken cancellationToken)
     {
         var existingConsents = await _userConsentRepository.FindAsync(
@@ -35,7 +35,7 @@ public class UserConsentService : IUserConsentService
         return hasAllScopes;
     }
 
-    public async Task GrantConsentAsync(long userId, string clientId, string scopes,
+    public async Task GrantConsentAsync(long userId, long clientId, string scopes,
         CancellationToken cancellationToken)
     {
         var consent = new UserConsent

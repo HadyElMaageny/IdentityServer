@@ -54,7 +54,7 @@ public class AuthorizationService : IAuthorizationService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
-                "Authorization code generated for user {UserId} and client {ClientIde}", 
+                "Authorization code generated for user {UserId} and client {ClientId}", 
                 userId, 
                 clientId);
 
