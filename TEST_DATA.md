@@ -55,7 +55,7 @@ All users have the same password: **`Password123!`**
 curl -X POST https://localhost:7208/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "test@example.com",
+    "username": "testuser",
     "password": "Password123!"
   }'
 ```
