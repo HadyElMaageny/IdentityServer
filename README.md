@@ -1,6 +1,6 @@
 # Identity Server: OAuth 2.0 / OpenID Connect on .NET 8
 
-An OAuth 2.0 / OpenID Connect authorization server written from scratch in ASP.NET Core 8, structured with Clean Architecture. It has a companion Angular 20 SPA ([`identity-client`](../identity-client)) that signs users in with the **Authorization Code flow + PKCE**.
+An OAuth 2.0 / OpenID Connect authorization server written from scratch in ASP.NET Core 8, structured with Clean Architecture. It has a companion Angular 20 SPA ([`identity-client/`](identity-client)) that signs users in with the **Authorization Code flow + PKCE**.
 
 No third-party identity framework is used: authorize, login, consent, token, userinfo and discovery are all implemented in this repository.
 
@@ -26,6 +26,7 @@ src/
 ├── IdentityServer.Domain          Entities (User, Client, Scope, AuthorizationCode, UserConsent, Token), repository interfaces
 ├── IdentityServer.Infrastructure  EF Core DbContext, configurations, migrations, repositories, seeder
 └── IdentityServer.Shared          Result pattern, settings, pagination
+identity-client/                   Angular 20 SPA (public client "spa"): PKCE sign-in, callback, dashboard
 ```
 
 Dependencies point inward: **API → Application → Domain ← Infrastructure**. Other building blocks: Repository + Unit of Work, the Result pattern, FluentValidation, AutoMapper, Serilog, health checks and Swagger.
@@ -112,7 +113,7 @@ dotnet ef database update --project src/IdentityServer.Infrastructure --startup-
 dotnet run --project src/IdentityServer.API --launch-profile https
 
 # 3. Angular client: http://localhost:4200
-cd ../identity-client && npm install && npx ng serve
+cd identity-client && npm install && npx ng serve
 ```
 
 Open http://localhost:4200 and click **Sign in with Identity Server**. Demo users are `alice`, `bob` and `testuser`, all with the password `Password123!`. See [TEST_DATA.md](TEST_DATA.md) for the clients, secrets and scopes.
