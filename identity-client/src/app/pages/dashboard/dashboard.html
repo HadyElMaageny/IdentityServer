@@ -1,0 +1,120 @@
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="app-brand" routerLink="/">
+      <span class="app-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      </span>
+      Identity Client
+    </a>
+    <div class="topbar-user">
+      <span class="avatar">{{ displayName().charAt(0).toUpperCase() }}</span>
+      <span class="who">
+        <strong>{{ displayName() }}</strong>
+        <small>{{ idClaims()?.['email'] }}</small>
+      </span>
+      <button class="btn btn-ghost btn-sm" (click)="logout()">Sign out</button>
+    </div>
+  </div>
+</header>
+
+<main class="container dash">
+  <section class="welcome">
+    <div>
+      <span class="eyebrow ok">● Authenticated</span>
+      <h1>Welcome, {{ displayName() }}</h1>
+      <p class="lead">
+        You signed in at the identity server, and this app received tokens through the
+        Authorization Code flow with PKCE.
+      </p>
+    </div>
+    <ul class="checks card">
+      <li><span class="tick">✓</span> <code>state</code> matched (CSRF protection)</li>
+      <li><span class="tick">✓</span> Code exchanged with <code>code_verifier</code> (S256)</li>
+      <li><span class="tick">✓</span> ID token <code>nonce</code> &amp; <code>aud</code> verified</li>
+      <li><span class="tick">✓</span> Access token accepted by <code>/connect/userinfo</code></li>
+    </ul>
+  </section>
+
+  <section class="grid">
+    <!-- Access token -->
+    <article class="card panel span-2">
+      <header class="panel-head">
+        <div>
+          <h2>Access token</h2>
+          <p class="muted">JWT · {{ tokens()?.token_type }} · signed HS256 by <code>{{ accessClaims()?.['iss'] }}</code></p>
+        </div>
+        <div class="expiry">
+          <span class="muted">Expires in</span>
+          <strong>{{ formatCountdown(secondsLeft()) }}</strong>
+        </div>
+      </header>
+      <div class="meter"><span [style.width.%]="lifetimePercent()"></span></div>
+
+      <pre class="jwt"><span class="jwt-h">{{ accessParts()[0] }}</span>.<span class="jwt-p">{{ accessParts()[1] }}</span>.<span class="jwt-s">{{ accessParts()[2] }}</span></pre>
+
+      <div class="panel-foot">
+        <div class="chips">
+          @for (scope of scopes(); track scope) {
+            <span class="chip">{{ scope }}</span>
+          }
+        </div>
+        <div class="refresh">
+          <span class="muted mono">refresh_token {{ short(tokens()?.refresh_token) }}</span>
+          <button class="btn btn-primary btn-sm" (click)="refresh()" [disabled]="refreshing() || !tokens()?.refresh_token">
+            {{ refreshing() ? 'Refreshing…' : 'Refresh token' }}
+          </button>
+        </div>
+      </div>
+      @if (refreshMessage(); as msg) {
+        <p class="note">
+          {{ msg }}
+          @if (rotatedFrom(); as old) {
+            <span class="mono">({{ short(old) }} → {{ short(tokens()?.refresh_token) }})</span>
+          }
+        </p>
+      }
+    </article>
+
+    <!-- ID token claims -->
+    <article class="card panel">
+      <header class="panel-head">
+        <div>
+          <h2>ID token claims</h2>
+          <p class="muted">OpenID Connect identity of the signed-in user</p>
+        </div>
+      </header>
+      <table class="claims">
+        <tbody>
+          @for (row of idClaimRows(); track row.key) {
+            <tr>
+              <th>{{ row.key }}</th>
+              <td>
+                @if (row.isTime) {
+                  {{ $any(row.value) | date: 'MMM d, y, HH:mm:ss' }}
+                } @else {
+                  {{ row.value }}
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </article>
+
+    <!-- UserInfo -->
+    <article class="card panel">
+      <header class="panel-head">
+        <div>
+          <h2>UserInfo response</h2>
+          <p class="muted"><span class="method">GET</span> <code>/connect/userinfo</code> with the bearer token</p>
+        </div>
+        <span class="status-ok">200 OK</span>
+      </header>
+      @if (userInfoError(); as err) {
+        <p class="note error">{{ err }}</p>
+      } @else {
+        <pre class="json">{{ userInfo() | json }}</pre>
+      }
+    </article>
+  </section>
+</main>

@@ -1,0 +1,20 @@
+<main class="center-page">
+  @if (error(); as err) {
+    <div class="status-card">
+      <span class="status-icon error" aria-hidden="true">!</span>
+      <h2>Sign-in did not complete</h2>
+      <code class="code-pill">{{ err.code }}</code>
+      <p class="muted">{{ err.message }}</p>
+      <div class="row-actions">
+        <a class="btn btn-ghost" routerLink="/">Back home</a>
+        <button class="btn btn-primary" (click)="retry()">Try again</button>
+      </div>
+    </div>
+  } @else {
+    <div class="status-card">
+      <span class="spinner" aria-hidden="true"></span>
+      <h2>Completing sign-in…</h2>
+      <p class="muted">Verifying state and exchanging the authorization code with the PKCE code verifier.</p>
+    </div>
+  }
+</main>

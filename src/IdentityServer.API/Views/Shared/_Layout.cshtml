@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@(ViewData["Title"] ?? "Sign in") · Identity Server</title>
+    <link rel="icon" href="~/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+<main class="shell">
+    <a class="brand" href="/" aria-label="Identity Server">
+        <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/>
+                <circle cx="12" cy="10" r="2.2"/>
+                <path d="M12 12.2V16"/>
+            </svg>
+        </span>
+        <span class="brand-name">Identity Server</span>
+    </a>
+
+    @RenderBody()
+
+    <footer class="foot">
+        <span>OAuth 2.0</span><span class="dot">•</span><span>OpenID Connect</span><span class="dot">•</span><span>PKCE</span>
+    </footer>
+</main>
+</body>
+</html>

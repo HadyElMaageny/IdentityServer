@@ -18,7 +18,7 @@ All users have the same password: **`Password123!`**
 | Client ID | Client Secret | Client Name | Redirect URIs | Allowed Grant Types |
 |-----------|---------------|-------------|---------------|---------------------|
 | webapp | webapp_secret | Test Web Application | https://localhost:5001/callback<br>https://localhost:5001/signin-oidc<br>http://localhost:3000/callback | authorization_code<br>refresh_token |
-| spa | spa_secret | Single Page Application | http://localhost:3000/callback<br>http://localhost:4200/callback | authorization_code |
+| spa | — (public client, PKCE required) | Single Page Application | http://localhost:3000/callback<br>http://localhost:4200/callback | authorization_code<br>refresh_token |
 | mobile-app | mobile_secret | Mobile Application | myapp://callback | authorization_code<br>refresh_token |
 | postman | postman_secret | Postman Testing Client | https://oauth.pstmn.io/v1/callback<br>https://www.getpostman.com/oauth2/callback | authorization_code<br>refresh_token |
 

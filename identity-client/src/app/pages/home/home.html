@@ -1,0 +1,65 @@
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="app-brand" routerLink="/">
+      <span class="app-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      </span>
+      Identity Client
+    </a>
+    <span class="pill">Angular SPA · public client <code>spa</code></span>
+  </div>
+</header>
+
+<main class="container home">
+  <section class="hero">
+    <div class="hero-copy">
+      <span class="eyebrow">OAuth 2.0 · OpenID Connect · PKCE</span>
+      <h1>Sign in through your own identity server</h1>
+      <p class="lead">
+        A single-page app that hands sign-in to a custom .NET authorization server, using the
+        Authorization Code flow with PKCE. It never sees the user's password. It only gets
+        short-lived, scoped tokens.
+      </p>
+
+      <div class="hero-actions">
+        @if (auth.isAuthenticated()) {
+          <a class="btn btn-primary btn-lg" routerLink="/dashboard">Open dashboard</a>
+        } @else {
+          <button class="btn btn-primary btn-lg" (click)="login()">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg>
+            Sign in with Identity Server
+          </button>
+        }
+        <a class="btn btn-ghost btn-lg" [href]="discoveryUrl" target="_blank" rel="noopener">Discovery document ↗</a>
+      </div>
+    </div>
+
+    <ol class="flow card">
+      <li class="flow-head">What happens when you sign in</li>
+      @for (step of steps; track step.title; let i = $index) {
+        <li class="flow-step">
+          <span class="flow-num">{{ i + 1 }}</span>
+          <div>
+            <div class="flow-title">{{ step.title }}</div>
+            <div class="flow-detail">{{ step.detail }}</div>
+          </div>
+        </li>
+      }
+    </ol>
+  </section>
+
+  <section class="features">
+    <article class="card feature">
+      <h3>PKCE for public clients</h3>
+      <p>The server requires a <code>code_challenge</code> from clients without a secret, and checks the <code>code_verifier</code> before it issues tokens.</p>
+    </article>
+    <article class="card feature">
+      <h3>Consent &amp; scopes</h3>
+      <p>Users approve each scope (<code>openid</code>, <code>profile</code>, <code>email</code>), and the server remembers what they granted for each client.</p>
+    </article>
+    <article class="card feature">
+      <h3>Token lifecycle</h3>
+      <p>Signed JWT access and ID tokens, one-time authorization codes, and refresh tokens that rotate on every use.</p>
+    </article>
+  </section>
+</main>

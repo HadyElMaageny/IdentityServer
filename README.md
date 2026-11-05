@@ -1,399 +1,148 @@
-# IdentityServer - Clean Architecture .NET 8 API
+# Identity Server: OAuth 2.0 / OpenID Connect on .NET 8
 
-A professional, production-ready ASP.NET Core Web API built with Clean Architecture (Onion Architecture) principles, featuring a complete CRUD implementation, authentication, validation, and comprehensive logging.
+An OAuth 2.0 / OpenID Connect authorization server written from scratch in ASP.NET Core 8, structured with Clean Architecture. It has a companion Angular 20 SPA ([`identity-client/`](identity-client)) that signs users in with the **Authorization Code flow + PKCE**.
 
-## 🏗️ Architecture
+No third-party identity framework is used: authorize, login, consent, token, userinfo and discovery are all implemented in this repository.
 
-This project follows **Clean Architecture** (also known as Onion Architecture) principles, which provide:
+## Features
 
-- **Independence of Frameworks**: The architecture doesn't depend on external libraries
-- **Testability**: Business rules can be tested without UI, database, or external elements
-- **Independence of UI**: The UI can change without changing the rest of the system
-- **Independence of Database**: Business rules are not bound to the database
-- **Independence of External Agency**: Business rules don't know anything about external interfaces
+| Area | What is implemented |
+|------|---------------------|
+| **Authorization endpoint** | `GET /connect/authorize`: exact-match `redirect_uri` validation, `state`, `nonce`, scope validation per client. An invalid client or redirect URI shows an error page and never redirects, so the server is not an open redirector. |
+| **PKCE (RFC 7636)** | `S256` and `plain`. Required for public clients (no secret); `code_verifier` checked in constant time. |
+| **Login** | Server-rendered sign-in page with its own session cookie (HttpOnly, SameSite=Lax) and antiforgery tokens. Passwords hashed with PBKDF2. |
+| **Consent** | Consent screen that lists each requested scope. Grants are remembered per user + client and merged when new scopes are approved. Deny returns `access_denied`. |
+| **Token endpoint** | `POST /connect/token`, form-encoded with RFC 6749 parameter names. Grants: `authorization_code`, `refresh_token`, `client_credentials`. Client auth via `client_secret_basic` or `client_secret_post` (secrets are stored hashed). |
+| **Tokens** | JWT access tokens with scope claims; OIDC ID tokens (`aud` = client, `nonce`, profile/email claims by scope); one-time authorization codes (10 min); **refresh token rotation** (the old token is revoked on every use). |
+| **OIDC** | `GET /connect/userinfo` (bearer protected, claims filtered by scope), `GET /.well-known/openid-configuration`, RP-initiated logout via `/connect/endsession` with validated `post_logout_redirect_uri`. |
+| **Errors** | RFC 6749 error codes (`invalid_grant`, `invalid_client` with 401 + `WWW-Authenticate`, …) and `Cache-Control: no-store` on token responses. |
 
-### Project Structure
+## Architecture
 
 ```
-IdentityServer/
-├── src/
-│   ├── IdentityServer.API/              # Presentation Layer
-│   │   ├── Controllers/                 # API Controllers
-│   │   ├── Middleware/                  # Custom middleware
-│   │   ├── Filters/                     # Action filters
-│   │   ├── Extensions/                  # Service configuration extensions
-│   │   ├── Program.cs                   # Application entry point
-│   │   └── appsettings.json             # Configuration files
-│   │
-│   ├── IdentityServer.Application/      # Application Layer
-│   │   ├── DTOs/                        # Data Transfer Objects
-│   │   ├── Interfaces/                  # Service interfaces
-│   │   ├── Services/                    # Business logic services
-│   │   ├── Mappings/                    # AutoMapper profiles
-│   │   └── Validators/                  # FluentValidation validators
-│   │
-│   ├── IdentityServer.Domain/           # Domain Layer (Core)
-│   │   ├── Entities/                    # Domain entities
-│   │   ├── ValueObjects/                # Value objects
-│   │   ├── Enums/                       # Enumerations
-│   │   ├── Exceptions/                  # Domain exceptions
-│   │   └── Interfaces/                  # Repository interfaces
-│   │
-│   ├── IdentityServer.Infrastructure/   # Infrastructure Layer
-│   │   ├── Data/                        # DbContext & UnitOfWork
-│   │   ├── Repositories/                # Repository implementations
-│   │   ├── Configurations/              # EF Core configurations
-│   │   └── Services/                    # External service implementations
-│   │
-│   └── IdentityServer.Shared/           # Shared Layer
-│       ├── Common/                      # Common utilities (Result pattern)
-│       └── Models/                      # Shared models (Pagination)
-│
-└── IdentityServer.sln                   # Solution file
+src/
+├── IdentityServer.API             Controllers, Razor login/consent views, middleware, DI setup
+├── IdentityServer.Application     OAuth/OIDC services (authorize, token, consent), DTOs, validators
+├── IdentityServer.Domain          Entities (User, Client, Scope, AuthorizationCode, UserConsent, Token), repository interfaces
+├── IdentityServer.Infrastructure  EF Core DbContext, configurations, migrations, repositories, seeder
+└── IdentityServer.Shared          Result pattern, settings, pagination
+identity-client/                   Angular 20 SPA (public client "spa"): PKCE sign-in, callback, dashboard
 ```
 
-## 🚀 Features
+Dependencies point inward: **API → Application → Domain ← Infrastructure**. Other building blocks: Repository + Unit of Work, the Result pattern, FluentValidation, AutoMapper, Serilog, health checks and Swagger.
 
-### Core Features
-- ✅ **Clean Architecture** with clear separation of concerns
-- ✅ **Repository Pattern** with Unit of Work
-- ✅ **Result Pattern** for consistent API responses
-- ✅ **CQRS Ready** with MediatR support
-- ✅ **Pagination Support** for list endpoints
-- ✅ **Soft Delete** implementation
-- ✅ **Audit Fields** (CreatedAt, UpdatedAt, CreatedBy, UpdatedBy)
+## Flow
 
-### Technical Features
-- ✅ **Entity Framework Core** with SQL Server
-- ✅ **AutoMapper** for object mapping
-- ✅ **FluentValidation** for input validation
-- ✅ **Serilog** for structured logging
-- ✅ **Swagger/OpenAPI** with JWT authentication support
-- ✅ **JWT Authentication** structure ready
-- ✅ **API Versioning** configured
-- ✅ **CORS Policy** setup
-- ✅ **Global Exception Handling** middleware
-- ✅ **Health Checks** endpoint
+```
+ Angular SPA (:4200)                  Identity Server (:7208)                    SQL Server
+      │                                        │                                     │
+ 1    │── GET /connect/authorize ─────────────>│ client + redirect_uri valid?        │
+      │   client_id, redirect_uri, scope,      │                                     │
+      │   state, nonce, code_challenge         │                                     │
+ 2    │<── 302 /account/login?ReturnUrl=… ─────│ no session cookie yet               │
+ 3    │── POST /account/login ────────────────>│── check password hash ─────────────>│
+      │<── 302 back to /authorize ─────────────│   + Set-Cookie (session)            │
+ 4    │── GET /connect/authorize (2nd) ───────>│ PKCE + scopes OK, no consent yet    │
+      │<── 302 /connect/consent ───────────────│                                     │
+ 5    │── POST /connect/consent (Allow) ──────>│── INSERT UserConsents ─────────────>│
+      │<── 302 back to /authorize ─────────────│                                     │
+ 6    │── GET /connect/authorize (3rd) ───────>│── INSERT AuthorizationCodes ───────>│
+      │<── 302 /callback?code=…&state=… ───────│                                     │
+ 7    │ check state, then                      │                                     │
+      │── POST /connect/token ────────────────>│── verify PKCE, mark code used ─────>│
+      │   code + code_verifier                 │── INSERT refresh token ────────────>│
+ 8    │<── access_token · id_token · refresh ──│                                     │
+      │ check nonce + aud, store tokens        │                                     │
+ 9    │── GET /connect/userinfo (Bearer) ─────>│                                     │
+```
 
-## 📋 Prerequisites
+### Step by step
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- [SQL Server](https://www.microsoft.com/sql-server) or SQL Server LocalDB
-- [Visual Studio 2022](https://visualstudio.microsoft.com/) or [VS Code](https://code.visualstudio.com/) or [Rider](https://www.jetbrains.com/rider/)
+1. **The user clicks "Sign in" in the Angular app.** The app generates a random `state`, `nonce` and `code_verifier`, saves them in `sessionStorage`, computes `code_challenge = BASE64URL(SHA256(code_verifier))`, and redirects the browser to **`/connect/authorize`** with `client_id`, `redirect_uri`, `scope`, `state`, `nonce` and `code_challenge`. The entry point is always `/connect/authorize`, never the login page.
+2. **The server checks the client.** It checks that the client exists and is enabled, that the `redirect_uri` is registered for it (exact match), and that it may use the `authorization_code` grant. There is no session cookie yet, so `Challenge("cookie")` redirects to **`/account/login`**, carrying the whole original request in `ReturnUrl`. If the client or `redirect_uri` is invalid, the server shows an error page and never redirects.
+3. **The user signs in.** The server looks the user up by username or email and verifies the password against the PBKDF2 hash stored in `Users.Password`. It then issues an encrypted, `HttpOnly` **session cookie**. The cookie is stored in the browser, not in the database. The user is redirected back to the `ReturnUrl`, which is `/connect/authorize` again.
+4. **`/connect/authorize`, second time.** The user is now known (the `sub` claim comes from the cookie). The server checks PKCE (a `code_challenge` is required for public clients) and the scopes (they must be allowed for this client in `ClientScopes`). The user has not consented yet (no row in `UserConsents`), so the server redirects to **`/connect/consent`**, again carrying the original request in `returnUrl`.
+5. **The user clicks Allow.** The server stores the grant in **`UserConsents`**, which is the first database write of the flow, and redirects back to `/connect/authorize`. If the user clicks Deny, the app receives `error=access_denied` instead.
+6. **`/connect/authorize`, third time.** Everything passes, including consent. The server creates an **authorization code** (random, valid for 10 minutes, single use) and stores it in `AuthorizationCodes` together with the `code_challenge` and `nonce`. The browser is redirected to the app's **`/callback?code=…&state=…`**.
+7. **The app exchanges the code.** It checks that the returned `state` matches the one in `sessionStorage`, then sends a direct request to **`POST /connect/token`** with the `code` and the **`code_verifier`**. The server checks the code (it exists, is unused and unexpired, and belongs to the same client and `redirect_uri`), verifies `SHA256(code_verifier) == code_challenge`, marks the code as used, and stores a refresh token in `Tokens`.
+8. **The app receives three tokens:** an `access_token`, an `id_token` and a `refresh_token`. It checks that the `id_token`'s `nonce` and `aud` match, stores the tokens in `sessionStorage`, and navigates to the dashboard.
+9. **The app calls APIs with the access token** (`Authorization: Bearer …`). In this project, `/connect/userinfo` is the protected resource. Other services (orders, catalog, …) would validate the JWT themselves (signature, `iss`, `aud`, `exp`, scopes) without calling the identity server.
 
-## 🛠️ Getting Started
+**Refresh:** when the access token expires, the app calls `/connect/token` with `grant_type=refresh_token`. The server looks the token up in `Tokens`, issues new tokens, and revokes the old refresh token (rotation).
 
-### 1. Clone the Repository
+### Where things are stored
+
+| Place | What lives there |
+|-------|------------------|
+| App `sessionStorage` (`:4200`) | `state`, `nonce` and `code_verifier` during sign-in, then the tokens |
+| URLs (`ReturnUrl` / `returnUrl`) | The original authorize request, carried through login and consent |
+| Browser cookies (`:7208`) | `.IdentityServer.Session` (encrypted sign-in session) and the antiforgery cookie |
+| `Users`, `Clients`, `Scopes`, `ClientScopes` | Seeded configuration (read only during the flow) |
+| `UserConsents` | Scopes each user approved for each client |
+| `AuthorizationCodes` | Issued codes with `CodeChallenge`, `Nonce`, `ExpiresAt`, `IsUsed` |
+| `Tokens` | Refresh tokens (`IsRevoked` is set to 1 when rotated) |
+
+### What each check protects against
+
+| Check | Protects against |
+|-------|------------------|
+| Exact `redirect_uri` match, with no redirect when it is invalid | Codes being sent to an attacker's site (open redirect) |
+| `state` | Login CSRF: an attacker's callback link signing you into *their* account |
+| PKCE (`code_challenge` / `code_verifier`) | A stolen authorization code being exchanged by someone else |
+| Single-use code that expires after 10 minutes | Replay of a leaked code |
+| `nonce` in the `id_token` | Replay of an old `id_token` |
+| Consent | Apps receiving user data the user never approved |
+| Refresh token rotation | Long-lived use of a leaked refresh token |
+| Antiforgery token on login and consent forms | Forms submitted from another site |
+
+### Tracing it yourself
+
+Run the API in Debug and set breakpoints in this order: `AuthorizationController.Authorize` → `AccountController.Login` (POST) → `AuthorizationEndpointService.ProcessAuthorizeRequestAsync` → `ConsentController.Submit` → `AuthorizationService.GenerateAuthorizationCodeAsync` → `TokenEndpointService.ProcessAuthorizationCodeGrantAsync` → `OidcController.UserInfo`. EF Core logs every SQL command to the console.
+
+[`oauth-playground.http`](src/IdentityServer.API/oauth-playground.http) has ready-made requests for the token endpoint, including failure cases: a wrong `code_verifier`, a reused code, a tampered token and a wrong client secret.
+
+## Getting started
+
+Prerequisites: .NET 8 SDK, SQL Server LocalDB (or any SQL Server), Node 20+.
 
 ```bash
-git clone <your-repo-url>
-cd IdentityServer
-```
-
-### 2. Configure Database Connection
-
-Update the connection string in `src/IdentityServer.API/appsettings.json`:
-
-```json
-"ConnectionStrings": {
-  "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=IdentityServerDb;Trusted_Connection=True;MultipleActiveResultSets=true"
-}
-```
-
-### 3. Apply Database Migrations
-
-```bash
-# Navigate to the Infrastructure project directory
-cd src/IdentityServer.Infrastructure
-
-# Add initial migration
-dotnet ef migrations add InitialCreate --startup-project ../IdentityServer.API
-
-# Update the database
-dotnet ef database update --startup-project ../IdentityServer.API
-```
-
-### 4. Run the Application
-
-```bash
-# Navigate to the API project
-cd ../IdentityServer.API
-
-# Run the application
-dotnet run
-```
-
-The API will be available at:
-- HTTPS: `https://localhost:7xxx`
-- HTTP: `http://localhost:5xxx`
-- Swagger UI: `https://localhost:7xxx/` (root URL in Development)
-
-## 📚 API Endpoints
-
-### Products API (v1)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/products` | Get all products (paginated) |
-| GET | `/api/v1/products/{id}` | Get product by ID |
-| POST | `/api/v1/products` | Create new product |
-| PUT | `/api/v1/products/{id}` | Update existing product |
-| DELETE | `/api/v1/products/{id}` | Delete product (soft delete) |
-
-### Health Check
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Application health check |
-
-### Example Request
-
-**Create Product:**
-```bash
-curl -X POST https://localhost:7xxx/api/v1/products \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Sample Product",
-    "description": "This is a sample product",
-    "price": 29.99,
-    "stock": 100,
-    "category": "Electronics",
-    "isActive": true
-  }'
-```
-
-**Get Products with Pagination:**
-```bash
-curl -X GET "https://localhost:7xxx/api/v1/products?pageNumber=1&pageSize=10"
-```
-
-## 🔧 Configuration
-
-### JWT Authentication
-
-Configure JWT settings in `appsettings.json`:
-
-```json
-"JwtSettings": {
-  "Secret": "YourSuperSecretKeyHere",
-  "Issuer": "IdentityServer",
-  "Audience": "IdentityServerAPI",
-  "ExpirationInMinutes": 60
-}
-```
-
-⚠️ **Important**: Change the `Secret` to a strong, random value in production!
-
-### Logging
-
-Serilog is configured to log to:
-- Console
-- File (`logs/log-{Date}.txt` with daily rolling)
-
-Adjust log levels in `appsettings.json`:
-
-```json
-"Serilog": {
-  "MinimumLevel": {
-    "Default": "Information",
-    "Override": {
-      "Microsoft": "Warning",
-      "System": "Warning"
-    }
-  }
-}
-```
-
-### CORS
-
-Two CORS policies are configured:
-- **AllowAll**: Used in Development (allows all origins)
-- **Production**: Restricted to specific domains
-
-Update the Production policy in `ServiceExtensions.cs`:
-
-```csharp
-builder.WithOrigins("https://yourdomain.com")
-```
-
-## 🧪 Testing
-
-### Using Swagger UI
-
-1. Run the application
-2. Navigate to `https://localhost:7xxx/`
-3. Use the Swagger UI to test endpoints
-
-### Using Postman
-
-Import the API collection:
-1. Open Postman
-2. Import > Link > `https://localhost:7xxx/swagger/v1/swagger.json`
-
-## 📦 NuGet Packages Used
-
-### API Project
-- `Microsoft.AspNetCore.Authentication.JwtBearer` - JWT authentication
-- `Serilog.AspNetCore` - Structured logging
-- `Swashbuckle.AspNetCore` - Swagger/OpenAPI
-- `Microsoft.AspNetCore.Mvc.Versioning` - API versioning
-
-### Application Project
-- `AutoMapper` - Object-object mapping
-- `FluentValidation` - Input validation
-- `MediatR` - CQRS pattern support
-
-### Infrastructure Project
-- `Microsoft.EntityFrameworkCore.SqlServer` - SQL Server provider
-- `Microsoft.EntityFrameworkCore.Tools` - EF Core tooling
-
-## 🏛️ Design Patterns
-
-### Repository Pattern
-Abstracts data access logic and provides a clean API for data operations.
-
-```csharp
-public interface IRepository<T> where T : BaseEntity
-{
-    Task<T?> GetByIdAsync(Guid id);
-    Task<IEnumerable<T>> GetAllAsync();
-    // ... other methods
-}
-```
-
-### Unit of Work Pattern
-Manages transactions and ensures data consistency.
-
-```csharp
-public interface IUnitOfWork : IDisposable
-{
-    Task<int> SaveChangesAsync();
-    Task BeginTransactionAsync();
-    Task CommitTransactionAsync();
-}
-```
-
-### Result Pattern
-Provides consistent success/failure responses.
-
-```csharp
-public class Result<T>
-{
-    public bool IsSuccess { get; set; }
-    public T? Data { get; set; }
-    public string? Message { get; set; }
-    public List<string>? Errors { get; set; }
-}
-```
-
-## 🔐 Security Best Practices
-
-1. **JWT Configuration**: Store JWT secrets in environment variables or Azure Key Vault
-2. **Connection Strings**: Use User Secrets for development, Azure Key Vault for production
-3. **CORS**: Configure specific origins in production
-4. **HTTPS**: Always use HTTPS in production
-5. **Input Validation**: All inputs are validated using FluentValidation
-6. **SQL Injection**: Protected by EF Core parameterized queries
-
-## 📝 Common Commands
-
-### Entity Framework Migrations
-
-```bash
-# Add a new migration
-dotnet ef migrations add <MigrationName> --project src/IdentityServer.Infrastructure --startup-project src/IdentityServer.API
-
-# Update database
+# 1. Database
 dotnet ef database update --project src/IdentityServer.Infrastructure --startup-project src/IdentityServer.API
 
-# Remove last migration
-dotnet ef migrations remove --project src/IdentityServer.Infrastructure --startup-project src/IdentityServer.API
+# 2. Identity server: https://localhost:7208 (Swagger at the root, test data seeded in Development)
+dotnet run --project src/IdentityServer.API --launch-profile https
 
-# Generate SQL script
-dotnet ef migrations script --project src/IdentityServer.Infrastructure --startup-project src/IdentityServer.API
+# 3. Angular client: http://localhost:4200
+cd identity-client && npm install && npx ng serve
 ```
 
-### Build and Run
+Open http://localhost:4200 and click **Sign in with Identity Server**. Demo users are `alice`, `bob` and `testuser`, all with the password `Password123!`. See [TEST_DATA.md](TEST_DATA.md) for the clients, secrets and scopes.
+
+> The first time, trust the ASP.NET Core development certificate (`dotnet dev-certs https --trust`) so the browser accepts `https://localhost:7208`.
+
+### Try the token endpoint directly
 
 ```bash
-# Restore dependencies
-dotnet restore
-
-# Build solution
-dotnet build
-
-# Run API project
-dotnet run --project src/IdentityServer.API
-
-# Run with specific environment
-dotnet run --project src/IdentityServer.API --environment Production
-
-# Watch mode (auto-reload on changes)
-dotnet watch run --project src/IdentityServer.API
+# Confidential client with HTTP Basic authentication
+curl -X POST https://localhost:7208/connect/token \
+  -u webapp:webapp_secret \
+  -d "grant_type=refresh_token&refresh_token=<token>"
 ```
 
-## 🚢 Deployment
+## Configuration
 
-### Docker Support (Future)
+`src/IdentityServer.API/appsettings.json`
 
-Add a Dockerfile for containerization:
+- `ConnectionStrings:DefaultConnection`: SQL Server connection string
+- `JwtSettings`: `Issuer`, `Audience`, `Secret` (at least 32 characters; keep it in user secrets or a key vault outside development), `AccessTokenMinutes`, `RefreshTokenDays`
 
-```dockerfile
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
-WORKDIR /app
-EXPOSE 80
-EXPOSE 443
+## Limitations
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-WORKDIR /src
-COPY ["src/IdentityServer.API/IdentityServer.API.csproj", "src/IdentityServer.API/"]
-RUN dotnet restore "src/IdentityServer.API/IdentityServer.API.csproj"
-COPY . .
-WORKDIR "/src/src/IdentityServer.API"
-RUN dotnet build "IdentityServer.API.csproj" -c Release -o /app/build
+These are deliberate scope limits for this project:
 
-FROM build AS publish
-RUN dotnet publish "IdentityServer.API.csproj" -c Release -o /app/publish
+- Tokens are signed with **HS256** (shared secret). A multi-tenant production deployment would use RS256/ES256 with a published JWKS endpoint.
+- No token introspection or revocation endpoints yet, and no admin UI for managing clients (clients are seeded).
 
-FROM base AS final
-WORKDIR /app
-COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "IdentityServer.API.dll"]
-```
+## Author
 
-### Azure Deployment
-
-1. Publish to Azure App Service
-2. Configure connection strings in Azure Portal
-3. Set up Azure SQL Database
-4. Configure Application Insights for monitoring
-
-## 📖 Additional Resources
-
-- [Clean Architecture by Uncle Bob](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
-- [ASP.NET Core Documentation](https://docs.microsoft.com/en-us/aspnet/core/)
-- [Entity Framework Core](https://docs.microsoft.com/en-us/ef/core/)
-- [AutoMapper Documentation](https://docs.automapper.org/)
-- [FluentValidation Documentation](https://docs.fluentvalidation.net/)
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 👥 Authors
-
-- Hady Ahmed - Initial work
-
-## 🙏 Acknowledgments
-
-- Clean Architecture principles by Robert C. Martin
-- ASP.NET Core team
-- Open source community
+Hady Ahmed

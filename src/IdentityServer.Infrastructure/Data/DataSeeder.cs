@@ -202,8 +202,8 @@ public static class DataSeeder
                 ClientName = "Single Page Application",
                 RedirectUris = "http://localhost:3000/callback,http://localhost:4200/callback",
                 PostLogoutRedirectUris = "http://localhost:3000/,http://localhost:4200/",
-                AllowedGrantTypes = "authorization_code",
-                AllowOfflineAccess = false,
+                AllowedGrantTypes = "authorization_code,refresh_token",
+                AllowOfflineAccess = true,
                 Enabled = true,
                 RequireClientSecret = false // SPA typically don't use client secrets
             },

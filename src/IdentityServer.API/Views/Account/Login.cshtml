@@ -1,0 +1,47 @@
+@model LoginViewModel
+@{
+    ViewData["Title"] = "Sign in";
+}
+
+<section class="card">
+    <h1>Sign in</h1>
+    <p class="lead">
+        @if (!string.IsNullOrEmpty(Model.ClientName))
+        {
+            <text>to continue to <strong>@Model.ClientName</strong></text>
+        }
+        else
+        {
+            <text>Use your account to continue</text>
+        }
+    </p>
+
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <div class="alert" role="alert">@Model.Error</div>
+    }
+
+    <form method="post" asp-controller="Account" asp-action="Login" novalidate>
+        <input type="hidden" asp-for="ReturnUrl" />
+
+        <div class="field">
+            <label asp-for="Username">Username or email</label>
+            <input asp-for="Username" autocomplete="username" autofocus required />
+        </div>
+
+        <div class="field">
+            <label asp-for="Password">Password</label>
+            <input asp-for="Password" type="password" autocomplete="current-password" required />
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+    </form>
+
+    @if (Model.ShowDemoAccounts)
+    {
+        <div class="hint">
+            Demo accounts: <code>alice</code>, <code>bob</code>, <code>testuser</code><br />
+            Password: <code>Password123!</code>
+        </div>
+    }
+</section>

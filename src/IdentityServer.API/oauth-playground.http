@@ -1,0 +1,73 @@
+### OAuth playground: send these from Rider (click ▶ next to each request)
+###
+### How to get a fresh, unused code + its code_verifier:
+###   1. Put a breakpoint in TokenController.cs (first line of Token()).
+###   2. Sign in from the Angular app. The debugger stops when Angular sends POST /connect/token.
+###   3. In the browser: DevTools → Network → "token" → Payload. Copy `code` and `code_verifier` below.
+###   4. Send the requests here while Angular's request is still paused.
+
+@host = https://localhost:7208
+@code = PASTE_CODE_HERE
+@verifier = PASTE_CODE_VERIFIER_HERE
+
+
+### 1) Discovery document: everything a client needs to know about this server
+GET {{host}}/.well-known/openid-configuration
+
+
+### 2) PKCE attack: right code, WRONG code_verifier → 400 invalid_grant
+###    (The code is NOT burned, because PKCE is checked before the code is marked as used.)
+POST {{host}}/connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&client_id=spa&redirect_uri=http://localhost:4200/callback&code={{code}}&code_verifier=AttackerDoesNotKnowTheRealVerifier_AttackerDoesNotKnowIt
+
+
+### 3) Normal exchange: right code + right verifier → 200 with tokens (saved for the next requests)
+POST {{host}}/connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&client_id=spa&redirect_uri=http://localhost:4200/callback&code={{code}}&code_verifier={{verifier}}
+
+> {%
+    client.global.set("access_token", response.body.access_token);
+    client.global.set("refresh_token", response.body.refresh_token);
+%}
+
+
+### 4) Code reuse: send the SAME code again → 400 "Authorization code has already been used"
+###    (Now resume the debugger: the Angular app's own request fails the same way.)
+POST {{host}}/connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&client_id=spa&redirect_uri=http://localhost:4200/callback&code={{code}}&code_verifier={{verifier}}
+
+
+### 5) Call a protected API with the access token → 200
+GET {{host}}/connect/userinfo
+Authorization: Bearer {{access_token}}
+
+
+### 6) No token → 401
+GET {{host}}/connect/userinfo
+
+
+### 7) Tampered token: decode the access token on jwt.io, change "sub", paste the edited token here → 401
+###    (The signature no longer matches the content.)
+GET {{host}}/connect/userinfo
+Authorization: Bearer PASTE_EDITED_TOKEN_HERE
+
+
+### 8) Confidential client with a WRONG secret (HTTP Basic auth) → 401 invalid_client
+POST {{host}}/connect/token
+Authorization: Basic webapp WRONG_SECRET
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=refresh_token&refresh_token=anything
+
+
+### 9) Public client asking for a grant it is not allowed to use → 400 unauthorized_client
+POST {{host}}/connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id=spa&scope=openid

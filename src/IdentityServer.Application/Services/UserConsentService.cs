@@ -38,15 +38,32 @@ public class UserConsentService : IUserConsentService
     public async Task GrantConsentAsync(long userId, long clientId, string scopes,
         CancellationToken cancellationToken)
     {
-        var consent = new UserConsent
-        {
-            UserId = userId,
-            ClientId = clientId,
-            Scopes = scopes,
-            GrantedAt = DateTime.UtcNow
-        };
+        var newScopes = scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-        await _userConsentRepository.AddAsync(consent, cancellationToken);
+        var existing = (await _userConsentRepository.FindAsync(
+                uc => uc.ClientId == clientId && uc.UserId == userId,
+                cancellationToken))
+            .FirstOrDefault();
+
+        if (existing is null)
+        {
+            await _userConsentRepository.AddAsync(new UserConsent
+            {
+                UserId = userId,
+                ClientId = clientId,
+                Scopes = string.Join(' ', newScopes.Distinct()),
+                GrantedAt = DateTime.UtcNow
+            }, cancellationToken);
+        }
+        else
+        {
+            existing.Scopes = string.Join(' ',
+                existing.Scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries).Union(newScopes));
+            existing.GrantedAt = DateTime.UtcNow;
+            existing.UpdatedAt = DateTime.UtcNow;
+            await _userConsentRepository.UpdateAsync(existing, cancellationToken);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("User {UserId} granted consent for client {ClientIdentifier} with scopes: {Scopes}",
             userId, clientId, scopes);

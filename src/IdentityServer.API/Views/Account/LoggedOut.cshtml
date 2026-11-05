@@ -1,0 +1,17 @@
+@model LoggedOutViewModel
+@{
+    ViewData["Title"] = "Signed out";
+}
+
+<section class="card">
+    <div class="status-icon ok" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m5 12 5 5 9-10"/>
+        </svg>
+    </div>
+    <h1>You are signed out</h1>
+    <p class="lead">
+        Your session at the identity server has ended@(string.IsNullOrEmpty(Model.ClientName) ? "." : $" and you have left {Model.ClientName}.")
+    </p>
+    <a class="btn btn-secondary btn-block" href="/account/login">Sign in again</a>
+</section>

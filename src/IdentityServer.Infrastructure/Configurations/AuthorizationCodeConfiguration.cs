@@ -27,6 +27,15 @@ public class AuthorizationCodeConfiguration : IEntityTypeConfiguration<Authoriza
         builder.Property(a => a.ExpiresAt)
             .IsRequired();
 
+        builder.Property(a => a.CodeChallenge)
+            .HasMaxLength(200);
+
+        builder.Property(a => a.CodeChallengeMethod)
+            .HasMaxLength(10);
+
+        builder.Property(a => a.Nonce)
+            .HasMaxLength(500);
+
         builder.Property(a => a.IsUsed)
             .HasDefaultValue(false);
 
