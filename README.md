@@ -390,7 +390,7 @@ This project is licensed under the MIT License.
 
 ## 👥 Authors
 
-- Your Name - Initial work
+- Hady Ahmed - Initial work
 
 ## 🙏 Acknowledgments
 
