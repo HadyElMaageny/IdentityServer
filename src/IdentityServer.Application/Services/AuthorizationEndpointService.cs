@@ -10,8 +10,17 @@ namespace IdentityServer.Application.Services;
 
 /// <summary>
 /// Service for processing OAuth 2.0 authorization endpoint requests
-/// Implements RFC 6749 Section 3.1 (Authorization Endpoint)
+/// Implements RFC 6749 Section 3.1 (Authorization Endpoint) and RFC 7636 (PKCE)
 /// </summary>
+/// <remarks>
+/// Errors are reported in two ways, as RFC 6749 §4.1.2.1 requires:
+/// <list type="bullet">
+/// <item>If the client or redirect_uri is invalid, the result is a <b>failure</b>. The caller must show an
+/// error page and must NOT redirect, otherwise the server would become an open redirector.</item>
+/// <item>Any later error is a <b>success</b> with Action = "error" and a redirect URI that carries
+/// <c>error</c>, <c>error_description</c> and <c>state</c> back to the client.</item>
+/// </list>
+/// </remarks>
 public class AuthorizationEndpointService(
     IRepository<Client> clientRepository,
     IRepository<Scope> scopeRepository,
@@ -21,19 +30,14 @@ public class AuthorizationEndpointService(
     ILogger<AuthorizationEndpointService> logger)
     : IAuthorizationEndpointService
 {
+    private static readonly string[] SupportedChallengeMethods = ["S256", "plain"];
+
     public async Task<Result<AuthorizationCodeResponse>> ProcessAuthorizeRequestAsync(
         AuthorizationCodeRequest request,
         long userId,
         CancellationToken cancellationToken = default)
     {
-        // Step 1: Validate response_type
-        var responseTypeValidation = ValidateResponseType(request.ResponseType);
-        if (!responseTypeValidation.IsSuccess)
-        {
-            return Result<AuthorizationCodeResponse>.Failure(responseTypeValidation.Errors!);
-        }
-
-        // Step 2: Validate client and redirect URI
+        // Step 1: Validate client and redirect URI (failures here must never redirect)
         var clientResult = await ValidateClientAndRedirectUriAsync(request, cancellationToken);
         if (!clientResult.IsSuccess)
         {
@@ -42,16 +46,26 @@ public class AuthorizationEndpointService(
 
         var client = clientResult.Data!;
 
-        // Step 3: Validate requested scopes
-        var scopeValidation = await ValidateScopesAsync(request.Scope, client.Id, cancellationToken);
-        if (!scopeValidation.IsSuccess)
-        {
-            return Result<AuthorizationCodeResponse>.Failure(scopeValidation.Errors!);
-        }
+        // Step 2: Validate response_type
+        if (string.IsNullOrWhiteSpace(request.ResponseType))
+            return ErrorRedirect(request, "invalid_request", "response_type is required");
+
+        if (request.ResponseType != "code")
+            return ErrorRedirect(request, "unsupported_response_type", "Only 'code' is supported");
+
+        // Step 3: Validate PKCE (required for public clients)
+        var pkceError = ValidatePkce(request, client);
+        if (pkceError is not null)
+            return ErrorRedirect(request, "invalid_request", pkceError);
+
+        // Step 4: Validate requested scopes
+        var scopeError = await ValidateScopesAsync(request.Scope, client.Id, cancellationToken);
+        if (scopeError is not null)
+            return ErrorRedirect(request, "invalid_scope", scopeError);
 
         var requestedScopes = ParseScopes(request.Scope);
 
-        // Step 4: Check if user has already granted consent
+        // Step 5: Check if user has already granted consent
         var hasConsent = await userConsentService.HasConsentAsync(
             userId,
             client.Id,
@@ -75,12 +89,15 @@ public class AuthorizationEndpointService(
             });
         }
 
-        // Step 5: Generate authorization code
+        // Step 6: Generate authorization code
         var codeResult = await authorizationService.GenerateAuthorizationCodeAsync(
             userId,
             client.Id,
             requestedScopes.ToArray(),
             request.RedirectUri,
+            request.CodeChallenge,
+            request.CodeChallengeMethod,
+            request.Nonce,
             cancellationToken);
 
         if (!codeResult.IsSuccess)
@@ -89,13 +106,17 @@ public class AuthorizationEndpointService(
                 "Failed to generate authorization code for user {UserId}, client {ClientId}",
                 userId,
                 client.ClientIdentifier);
-            return Result<AuthorizationCodeResponse>.Failure(codeResult.Errors!);
+            return ErrorRedirect(request, "server_error", "Failed to generate authorization code");
         }
 
         var authCode = codeResult.Data!;
 
-        // Step 6: Build redirect URI with authorization code and state
-        var redirectUri = BuildSuccessRedirectUri(request.RedirectUri, authCode.Code, request.State);
+        // Step 7: Build redirect URI with authorization code and state
+        var redirectUri = BuildRedirectUri(request.RedirectUri, new Dictionary<string, string?>
+        {
+            ["code"] = authCode.Code,
+            ["state"] = request.State
+        });
 
         logger.LogInformation(
             "Authorization code {CodeId} generated successfully for user {UserId}, client {ClientId}",
@@ -113,30 +134,9 @@ public class AuthorizationEndpointService(
         });
     }
 
-    /// <summary>
-    /// Validates the response_type parameter (RFC 6749 Section 3.1.1)
-    /// </summary>
-    private static Result<bool> ValidateResponseType(string responseType)
-    {
-        if (string.IsNullOrWhiteSpace(responseType))
-        {
-            return Result<bool>.Failure("invalid_request: response_type is required");
-        }
-
-        if (responseType != "code")
-        {
-            return Result<bool>.Failure("unsupported_response_type: Only 'code' is supported");
-        }
-
-        return Result<bool>.Success(true);
-    }
-
-    /// <summary>
-    /// Validates client credentials and redirect URI
-    /// </summary>
-    private async Task<Result<Client>> ValidateClientAndRedirectUriAsync(
+    public async Task<Result<Client>> ValidateClientAndRedirectUriAsync(
         AuthorizationCodeRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.ClientId))
         {
@@ -148,16 +148,15 @@ public class AuthorizationEndpointService(
             return Result<Client>.Failure("invalid_request: redirect_uri is required");
         }
 
-        // Find client
-        var clients = await clientRepository.FindAsync(
-            c => c.ClientIdentifier == request.ClientId && !c.IsDeleted,
-            cancellationToken);
+        var client = (await clientRepository.FindAsync(
+                c => c.ClientIdentifier == request.ClientId && !c.IsDeleted,
+                cancellationToken))
+            .FirstOrDefault();
 
-        var client = clients.FirstOrDefault();
         if (client == null)
         {
             logger.LogWarning("Authorization request with invalid client_id: {ClientId}", request.ClientId);
-            return Result<Client>.Failure("unauthorized_client: Invalid client credentials");
+            return Result<Client>.Failure("unauthorized_client: Unknown client");
         }
 
         if (!client.Enabled)
@@ -166,24 +165,18 @@ public class AuthorizationEndpointService(
             return Result<Client>.Failure("unauthorized_client: Client is disabled");
         }
 
-        // Validate redirect URI
-        var allowedUris = ParseRedirectUris(client.RedirectUris);
+        // Exact-match redirect URI validation (OAuth 2.0 Security BCP)
+        var allowedUris = SplitList(client.RedirectUris);
         if (!allowedUris.Contains(request.RedirectUri, StringComparer.Ordinal))
         {
             logger.LogWarning(
                 "Invalid redirect_uri {RedirectUri} for client {ClientId}",
                 request.RedirectUri,
                 request.ClientId);
-            return Result<Client>.Failure("invalid_request: redirect_uri not registered for this client");
+            return Result<Client>.Failure("invalid_request: redirect_uri is not registered for this client");
         }
 
-        // Validate grant type support
-        var allowedGrantTypes = client.AllowedGrantTypes
-            .Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(gt => gt.Trim())
-            .ToList();
-
-        if (!allowedGrantTypes.Contains("authorization_code", StringComparer.OrdinalIgnoreCase))
+        if (!SplitList(client.AllowedGrantTypes).Contains("authorization_code", StringComparer.OrdinalIgnoreCase))
         {
             logger.LogWarning(
                 "Client {ClientId} does not support authorization_code grant type",
@@ -194,99 +187,99 @@ public class AuthorizationEndpointService(
         return Result<Client>.Success(client);
     }
 
+    public string BuildErrorRedirectUri(string redirectUri, string error, string description, string? state)
+        => BuildRedirectUri(redirectUri, new Dictionary<string, string?>
+        {
+            ["error"] = error,
+            ["error_description"] = description,
+            ["state"] = state
+        });
+
+    private Result<AuthorizationCodeResponse> ErrorRedirect(
+        AuthorizationCodeRequest request, string error, string description)
+    {
+        logger.LogWarning(
+            "Authorization request for client {ClientId} rejected: {Error} - {Description}",
+            request.ClientId, error, description);
+
+        return Result<AuthorizationCodeResponse>.Success(new AuthorizationCodeResponse
+        {
+            Action = "error",
+            RedirectUri = BuildErrorRedirectUri(request.RedirectUri, error, description, request.State),
+            State = request.State
+        });
+    }
+
+    private static string? ValidatePkce(AuthorizationCodeRequest request, Client client)
+    {
+        if (string.IsNullOrEmpty(request.CodeChallenge))
+        {
+            // Public clients cannot keep a secret, so PKCE is their proof of possession (RFC 7636, OAuth 2.0 BCP)
+            return client.RequireClientSecret ? null : "code_challenge is required for public clients (PKCE)";
+        }
+
+        var method = request.CodeChallengeMethod ?? "plain";
+        if (!SupportedChallengeMethods.Contains(method, StringComparer.Ordinal))
+            return "code_challenge_method must be 'S256' or 'plain'";
+
+        if (request.CodeChallenge.Length is < 43 or > 128)
+            return "code_challenge must be between 43 and 128 characters";
+
+        return null;
+    }
+
     /// <summary>
-    /// Validates that requested scopes are valid and allowed for the client
+    /// Validates that requested scopes exist and are allowed for the client. Returns an error message or null.
     /// </summary>
-    private async Task<Result<bool>> ValidateScopesAsync(
+    private async Task<string?> ValidateScopesAsync(
         string scopeString,
         long clientId,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(scopeString))
         {
-            return Result<bool>.Failure("invalid_scope: scope parameter is required");
+            return "scope parameter is required";
         }
 
         var requestedScopes = ParseScopes(scopeString);
 
-        // Get all valid scopes from database
         var allScopes = await scopeRepository.GetAllAsync(cancellationToken);
         var validScopeNames = allScopes.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // Check if all requested scopes are valid
-        var invalidScopes = requestedScopes
-            .Where(scope => !validScopeNames.Contains(scope))
-            .ToList();
-
-        if (invalidScopes.Any())
+        var invalidScopes = requestedScopes.Where(scope => !validScopeNames.Contains(scope)).ToList();
+        if (invalidScopes.Count != 0)
         {
-            logger.LogWarning(
-                "Invalid scopes requested for client {ClientId}: {InvalidScopes}",
-                clientId,
-                string.Join(", ", invalidScopes));
-            return Result<bool>.Failure($"invalid_scope: Unknown scopes: {string.Join(", ", invalidScopes)}");
+            return $"Unknown scopes: {string.Join(", ", invalidScopes)}";
         }
 
-        var allClientValidScopes = await clientScopeRepository.GetScopesAsync(clientId, cancellationToken);
-        var allowedScopeNames = allClientValidScopes
-                .Select(s => s.Name)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var notAllowedScopes = requestedScopes
-            .Where(scope => !allowedScopeNames.Contains(scope))
-            .ToList();
-        if (notAllowedScopes.Any())
-        {
-            logger.LogWarning(
-                "Client {ClientId} requested unauthorized scopes: {NotAllowedScopes}",
-                clientId,
-                string.Join(", ", notAllowedScopes));
+        var allowedScopeNames = (await clientScopeRepository.GetScopesAsync(clientId, cancellationToken))
+            .Select(s => s.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            return Result<bool>.Failure($"invalid_scope: Client not allowed to request: {string.Join(", ", notAllowedScopes)}");
+        var notAllowedScopes = requestedScopes.Where(scope => !allowedScopeNames.Contains(scope)).ToList();
+        if (notAllowedScopes.Count != 0)
+        {
+            return $"Client not allowed to request: {string.Join(", ", notAllowedScopes)}";
         }
-        
-        return Result<bool>.Success(true);
+
+        return null;
     }
 
-    /// <summary>
-    /// Parses space-separated scopes into a list
-    /// </summary>
-    private static List<string> ParseScopes(string scopeString)
-    {
-        return scopeString
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(s => s.Trim())
-            .Where(s => !string.IsNullOrEmpty(s))
+    private static List<string> ParseScopes(string scopeString) =>
+        scopeString
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct()
             .ToList();
-    }
 
-    /// <summary>
-    /// Parses comma-separated redirect URIs into a list
-    /// </summary>
-    private static List<string> ParseRedirectUris(string redirectUrisString)
+    private static List<string> SplitList(string value) =>
+        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private static string BuildRedirectUri(string redirectUri, IDictionary<string, string?> parameters)
     {
-        return redirectUrisString
-            .Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(uri => uri.Trim())
-            .Where(uri => !string.IsNullOrEmpty(uri))
-            .ToList();
-    }
+        var nonEmpty = parameters
+            .Where(p => !string.IsNullOrEmpty(p.Value))
+            .ToDictionary(p => p.Key, p => p.Value);
 
-    /// <summary>
-    /// Builds redirect URI with authorization code and state (RFC 6749 Section 4.1.2)
-    /// </summary>
-    private static string BuildSuccessRedirectUri(string redirectUri, string code, string? state)
-    {
-        var queryParams = new Dictionary<string, string?>
-        {
-            ["code"] = code
-        };
-
-        if (!string.IsNullOrEmpty(state))
-        {
-            queryParams["state"] = state;
-        }
-
-        return QueryHelpers.AddQueryString(redirectUri, queryParams);
+        return QueryHelpers.AddQueryString(redirectUri, nonEmpty);
     }
 }

@@ -38,6 +38,7 @@ public static class ServiceExtensions
         services.AddScoped<ITokenEndpointService, TokenEndpointService>();
         services.AddScoped<IAuthorizationService, AuthorizationService>();
         services.AddScoped<IUserConsentService, UserConsentService>();
+        services.AddScoped<IAuthorizationEndpointService, AuthorizationEndpointService>();
 
         // Add password hasher
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
@@ -53,12 +54,20 @@ public static class ServiceExtensions
 
         // Add repositories
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+        services.AddScoped<IClientScopeRepository, ClientScopeRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;
     }
 
-    public static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
+    public const string CookieScheme = "cookie";
+    public const string JwtScheme = "jwt";
+
+    /// <summary>
+    /// Registers the two authentication schemes of the identity server:
+    /// a cookie for the user's sign-in session (default) and JWT bearer for issued access tokens.
+    /// </summary>
+    public static IServiceCollection AddIdentityServerAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         // Bind JwtSettings from configuration
         services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
@@ -68,11 +77,24 @@ public static class ServiceExtensions
 
         services.AddAuthentication(options =>
         {
-            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultScheme = CookieScheme;
+            options.DefaultChallengeScheme = CookieScheme;
         })
-        .AddJwtBearer(options =>
+        .AddCookie(CookieScheme, options =>
         {
+            options.Cookie.Name = ".IdentityServer.Session";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            options.LoginPath = "/account/login";
+            options.LogoutPath = "/account/logout";
+            options.ExpireTimeSpan = TimeSpan.FromHours(8);
+            options.SlidingExpiration = true;
+        })
+        .AddJwtBearer(JwtScheme, options =>
+        {
+            // Keep JWT claim names as issued ("sub", "scope", ...) instead of mapping to WS-* URIs
+            options.MapInboundClaims = false;
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
@@ -96,12 +118,9 @@ public static class ServiceExtensions
             {
                 Title = "IdentityServer API",
                 Version = "v1",
-                Description = "A professional .NET 8 Web API with Clean Architecture",
-                Contact = new OpenApiContact
-                {
-                    Name = "API Support",
-                    Email = "support@identityserver.com"
-                }
+                Description = "OAuth 2.0 / OpenID Connect authorization server built on .NET 8 and Clean Architecture. " +
+                              "Authorization Code flow with PKCE, user consent, refresh token rotation, " +
+                              "ID tokens, UserInfo and discovery endpoints."
             });
 
             // Add JWT Authentication to Swagger

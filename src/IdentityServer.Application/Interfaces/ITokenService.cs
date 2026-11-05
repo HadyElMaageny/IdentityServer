@@ -10,12 +10,13 @@ public interface ITokenService
     Task<AuthResponse> GenerateTokensAsync(User user);
     
     /// <summary>
-    /// Generates access token, refresh token, and ID token for a user
+    /// Generates access token, refresh token, and (when the "openid" scope is granted) an ID token for a user
     /// </summary>
     Task<Result<TokenResponse>> GenerateTokensAsync(
         User user,
         Client client,
         string[] scopes,
+        string? nonce = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

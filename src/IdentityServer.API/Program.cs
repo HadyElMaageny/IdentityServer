@@ -18,8 +18,8 @@ try
     // Add Serilog
     builder.Host.UseSerilog();
 
-    // Add services to the container
-    builder.Services.AddControllers(options =>
+    // MVC: API controllers + server-rendered login / consent pages
+    builder.Services.AddControllersWithViews(options =>
     {
         options.Filters.Add<ValidationFilter>();
     });
@@ -27,7 +27,12 @@ try
     // Add custom service extensions
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration);
-    builder.Services.AddJwtAuthentication(builder.Configuration);
+
+    // Authentication:
+    //  - "cookie": the user's single sign-on session at the identity server (login page, /connect/authorize)
+    //  - "jwt":    bearer tokens issued by /connect/token (used by /connect/userinfo and protected APIs)
+    builder.Services.AddIdentityServerAuthentication(builder.Configuration);
+
     builder.Services.AddSwaggerDocumentation();
     builder.Services.AddApiVersioningConfiguration();
     builder.Services.AddCorsPolicy();
@@ -66,6 +71,7 @@ try
         {
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "IdentityServer API V1");
             c.RoutePrefix = string.Empty; // Serve Swagger UI at root
+            c.DocumentTitle = "IdentityServer API";
         });
     }
 
@@ -73,6 +79,7 @@ try
     app.UseMiddleware<ExceptionHandlingMiddleware>();
 
     app.UseHttpsRedirection();
+    app.UseStaticFiles();
 
     // Use CORS
     app.UseCors(app.Environment.IsDevelopment() ? "AllowAll" : "Production");

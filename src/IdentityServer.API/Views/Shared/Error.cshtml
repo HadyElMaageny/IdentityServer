@@ -1,0 +1,18 @@
+@model ErrorViewModel
+@{
+    ViewData["Title"] = "Authorization error";
+}
+
+<section class="card">
+    <div class="status-icon error" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.5v.01"/>
+        </svg>
+    </div>
+    <h1>We couldn't process this request</h1>
+    <span class="code-pill">@Model.Error</span>
+    <p class="lead">@Model.ErrorDescription</p>
+    <p class="fineprint">
+        For your security you were not redirected back to the application, because the request could not be verified.
+    </p>
+</section>

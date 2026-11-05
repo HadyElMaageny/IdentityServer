@@ -28,6 +28,9 @@ public class AuthorizationService : IAuthorizationService
         long clientId, 
         string[] scopes, 
         string redirectUri,
+        string? codeChallenge,
+        string? codeChallengeMethod,
+        string? nonce,
         CancellationToken cancellationToken)
     {
         try
@@ -47,6 +50,9 @@ public class AuthorizationService : IAuthorizationService
                 Scopes = string.Join(" ", scopes),
                 ExpiresAt = expiresAt,
                 IsUsed = false,
+                CodeChallenge = codeChallenge,
+                CodeChallengeMethod = string.IsNullOrEmpty(codeChallenge) ? null : codeChallengeMethod ?? "plain",
+                Nonce = nonce,
                 CreatedAt = DateTime.UtcNow
             };
 

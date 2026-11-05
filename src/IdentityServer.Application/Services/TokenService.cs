@@ -1,5 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using IdentityServer.Application.DTOs;
 using IdentityServer.Application.Interfaces;
@@ -81,16 +82,18 @@ public class TokenService : ITokenService
         User user,
         Client client,
         string[] scopes,
+        string? nonce = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
             var accessExpires = DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenMinutes);
-            var refreshExpires = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenDays);
 
             var accessToken = GenerateJwtForClient(user, client, scopes, accessExpires);
-            var idToken = GenerateIdTokenForClient(user, client, scopes, accessExpires);
-            var refreshToken = Guid.NewGuid().ToString("N");
+            var idToken = scopes.Contains("openid")
+                ? GenerateIdTokenForClient(user, client, scopes, nonce, accessExpires)
+                : null;
+            var refreshToken = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
 
             return Shared.Common.Result<DTOs.Token.TokenResponse>.Success(new DTOs.Token.TokenResponse
             {
@@ -163,9 +166,46 @@ public class TokenService : ITokenService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private string GenerateIdTokenForClient(User user, Client client, string[] scopes, DateTime expiresAt)
+    /// <summary>
+    /// OpenID Connect ID token (OIDC Core §2): audience is the client, claims depend on granted scopes.
+    /// </summary>
+    private string GenerateIdTokenForClient(User user, Client client, string[] scopes, string? nonce, DateTime expiresAt)
     {
-        return GenerateJwtForClient(user, client, scopes, expiresAt);
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.AuthTime, now, ClaimValueTypes.Integer64),
+            new(JwtRegisteredClaimNames.Iat, now, ClaimValueTypes.Integer64)
+        };
+
+        if (!string.IsNullOrEmpty(nonce))
+            claims.Add(new Claim(JwtRegisteredClaimNames.Nonce, nonce));
+
+        if (scopes.Contains("profile"))
+        {
+            claims.Add(new Claim("name", user.Username));
+            claims.Add(new Claim("preferred_username", user.Username));
+        }
+
+        if (scopes.Contains("email"))
+        {
+            claims.Add(new Claim(JwtRegisteredClaimNames.Email, user.Email));
+            claims.Add(new Claim("email_verified", "false", ClaimValueTypes.Boolean));
+        }
+
+        var token = new JwtSecurityToken(
+            issuer: _jwtSettings.Issuer,
+            audience: client.ClientIdentifier,
+            claims: claims,
+            expires: expiresAt,
+            signingCredentials: creds
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     private string GenerateClientCredentialsJwt(Client client, string[] scopes, DateTime expiresAt)
